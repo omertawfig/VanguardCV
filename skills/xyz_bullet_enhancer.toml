@@ -1,0 +1,19 @@
+id = "xyz_bullet_enhancer"
+name = "XYZ Bullet Enhancer"
+category = "Writing Quality"
+version = "1.0.0"
+description = "Rewrites bullets using Google's XYZ formula: Accomplished [X] as measured by [Y], by doing [Z]."
+default_enabled = true
+
+[rules]
+framework = "xyz"
+require_context = true
+forbid_fabricated_metrics = true
+
+[prompt_injection]
+system_directives = """
+- Structure bullet points using the XYZ formula: Accomplished [X], as measured by [Y], by doing [Z].
+- Emphasize business impact and technical depth before listing methods.
+- CRITICAL: Never invent numbers, percentages, or dollar values not present or directly implied in the candidate's original text. If a metric is missing, focus on the qualitative outcome or scope (e.g., 'across production clusters').
+- Keep bullet points concise, ideally 1-2 lines in the final PDF.
+"""

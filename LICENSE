@@ -1,0 +1,62 @@
+VanguardCV Source-Available License (All Rights Reserved)
+
+Copyright (c) 2026 Omer Tawfig. All rights reserved.
+
+1. Ownership
+This software ("VanguardCV"), including its source code, compiled binaries,
+installers, artwork, logos, icons, templates, documentation, and associated
+files (collectively, the "Software"), is the exclusive intellectual property
+of Omer Tawfig ("the Author").
+
+2. Permitted Viewing and Personal Use
+Subject to the terms of this License:
+  (a) Source Inspection: You may view the source code in this repository
+      solely for personal reading, educational study, and security auditing.
+  (b) Personal Use of Official Releases: You may download, install, and run
+      unmodified official binary releases of VanguardCV published by the
+      Author strictly for your own personal, non-commercial use.
+  (c) Bug Reports: You may open issues or report bugs to the Author. If you
+      voluntarily submit feedback, suggestions, or pull requests, you grant
+      the Author an unrestricted, perpetual, irrevocable, royalty-free right
+      to use or incorporate them without obligation.
+
+3. Strict Prohibitions
+Without prior express written permission from Omer Tawfig, you may NOT:
+  (a) Copy, reproduce, distribute, redistribute, publish, mirror, or repackage
+      the Software or any portion of it in source or binary form;
+  (b) Modify, adapt, translate, reverse-engineer for redistribution, or
+      create derivative works based on the Software;
+  (c) Publish, distribute, release, or operate any fork, clone, rebranded
+      build, or modified version of the Software;
+  (d) Use the Software, in whole or in part, for commercial purposes,
+      commercial distribution, resale, sublicensing, or as a hosted or
+      managed service;
+  (e) Use the "VanguardCV" name, logo, icons, or branding in any product,
+      distribution, or service not officially published by the Author;
+  (f) Remove, alter, or obscure any copyright, trademark, attribution, or
+      license notices contained in the Software.
+
+4. Platform Notice
+While GitHub's Terms of Service allow repository viewing and technical
+forking on public GitHub repositories, this License grants NO permission to
+distribute, publish, modify for redistribution, commercialize, or claim
+ownership over any fork or derivative of the Software. All rights not
+expressly granted in Section 2 are strictly reserved by the Author.
+
+5. Third-Party Components
+VanguardCV uses third-party open-source libraries and bundled fonts (such as
+Libertinus Serif under the SIL Open Font License 1.1). Those third-party
+components remain governed by their own respective licenses and are not
+restricted by this License.
+
+6. Disclaimer of Warranty and Limitation of Liability
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. Licensing Inquiries
+For commercial licensing or written permissions, contact Omer Tawfig via
+https://github.com/omertawfig/VanguardCV.

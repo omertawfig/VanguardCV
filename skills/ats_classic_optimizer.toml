@@ -1,0 +1,21 @@
+id = "ats_classic_optimizer"
+name = "ATS Classic Optimizer"
+category = "Formatting & ATS"
+version = "1.0.0"
+description = "Keeps the CV parseable by classic ATS engines and fronts grounded keywords."
+default_enabled = true
+
+[rules]
+enforce_action_verbs = true
+prefer_quantified_metrics = true
+max_lines_per_bullet = 2
+strip_first_person_pronouns = true
+
+[prompt_injection]
+system_directives = """
+- Begin every experience bullet with a strong past-tense action verb (or present-tense if the role is marked '(Currently)').
+- Align technical terminology in SKILLS AND OTHERS and PROFESSIONAL EXPERIENCE with the exact phrasing used in the target Job Description, provided the candidate possesses the underlying skill in the base CV.
+- Never invent companies, degrees, or technologies not grounded in the base CV.
+- Format inline skill categories concisely so they wrap cleanly across lines using ' - ' or ', ' separators.
+- Eliminate first-person pronouns (I, my, we).
+"""

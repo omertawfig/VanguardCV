@@ -1,0 +1,18 @@
+id = "page_compressor"
+name = "Page Compressor"
+category = "Layout & Brevity"
+version = "1.0.0"
+description = "Condenses bullet points and trims verbosity to fit CV within page budget without losing impact."
+default_enabled = false
+
+[rules]
+target_reduction = "tight"
+max_bullet_words = 22
+
+[prompt_injection]
+system_directives = """
+- Edit ruthlessly for brevity: eliminate filler phrases ('responsible for', 'successfully helped to', 'participated in').
+- Tighten bullet wording so each bullet fits within 1 or 2 lines without hanging orphan words (widows).
+- Consolidate redundant bullet points that describe the same underlying project or responsibility.
+- Preserve all high-value technical keywords and quantifiable results while reducing total word count.
+"""

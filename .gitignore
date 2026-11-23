@@ -1,0 +1,32 @@
+# Rust build & release outputs
+/target
+/dist
+/installer/output
+
+# Internal docs & design scratchpads (excluded from public repository)
+/Docs/
+/vanguard-ui/
+/logo.png
+
+# IDE & OS metadata
+/.idea
+/.vscode
+.DS_Store
+Thumbs.db
+
+# Local databases, backups, secrets, and user exports (never ship)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.bak
+*.vanguard
+*.pdf
+*.log
+.env
+.env.*
+ai.toml
+credentials.json
+*.key
+*.pem

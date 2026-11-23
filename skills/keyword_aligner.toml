@@ -1,0 +1,18 @@
+id = "keyword_aligner"
+name = "Keyword Aligner"
+category = "Targeting"
+version = "1.0.0"
+description = "Aligns terminology in experience and skills with keywords from the target Job Description."
+default_enabled = true
+
+[rules]
+strict_grounding = true
+highlight_overlap = true
+
+[prompt_injection]
+system_directives = """
+- Cross-reference the target job description against the candidate's existing experience and skills.
+- Map synonymous terms to the exact keywords used in the job description (e.g., replace 'container orchestration' with 'Kubernetes' only if Kubernetes is in the candidate's background).
+- Highlight and preserve hard requirements mentioned in the job description that match the candidate's experience.
+- When calculating ATS match score, report matched and missing keywords accurately.
+"""
