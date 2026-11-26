@@ -8,6 +8,7 @@ use crate::ui::components::ui::{
     render_icon_button, render_toggle,
 };
 use crate::ui::theme::Theme;
+use crate::ui::views::import_modal::render_import_cv_modal;
 use crate::ui::workspace::{Dialog, WorkspaceView};
 
 pub fn render_modal_overlay(
@@ -19,6 +20,7 @@ pub fn render_modal_overlay(
 
     let content = match dialog {
         Dialog::NewMaster => render_new_master_modal(workspace, theme, cx),
+        Dialog::ImportCv => render_import_cv_modal(workspace, theme, cx),
         Dialog::NewVariation { root_id } => {
             render_new_variation_modal(workspace, *root_id, theme, cx)
         }

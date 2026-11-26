@@ -5,6 +5,7 @@ pub mod ai;
 pub mod contracts;
 pub mod credentials;
 pub mod db;
+pub mod importer;
 pub mod jobs;
 pub mod mocks;
 pub mod pdf;

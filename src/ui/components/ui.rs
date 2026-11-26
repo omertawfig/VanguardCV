@@ -261,6 +261,33 @@ pub fn render_toggle(
         )
 }
 
+/// Renders the VanguardCV brand emblem inside an elevated, high-contrast framed
+/// tile so the logo reads bigger and bolder in both dark and light themes
+/// without modifying the underlying artwork.
+pub fn render_brand_logo_badge(tile_size: f32, logo_size: f32, radius: f32, theme: &Theme) -> Div {
+    let (badge_bg, badge_border) = match theme.mode {
+        theme::ThemeMode::Dark => (rgb(0x231a1c), rgba(0xd9384858)),
+        theme::ThemeMode::Light => (theme.surface, rgba(0x84001033)),
+    };
+
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(tile_size))
+        .rounded(px(radius))
+        .bg(badge_bg)
+        .border_1()
+        .border_color(badge_border)
+        .shadow_sm()
+        .child(
+            img("branding/logo.png")
+                .size(px(logo_size))
+                .object_fit(ObjectFit::Contain),
+        )
+}
+
 pub fn render_empty_state(icon: IconName, title: &str, description: &str, theme: &Theme) -> Div {
     div()
         .flex()

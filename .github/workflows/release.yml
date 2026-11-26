@@ -143,6 +143,7 @@ jobs:
             "- **Windows Installer ($bt$installerName$bt)**: Clean per-user Windows 10/11 x64 setup — launches with an empty local SQLite workspace and zero pre-seeded personal data.",
             "- **Built-in Auto-Updater**: Checks GitHub Releases, verifies installer SHA-256 checksums against ${bt}SHA256SUMS.txt${bt}, and installs updates seamlessly with an on/off toggle in **Settings -> Software updates**.",
             "- **Zero-Trust PII Air-Gap**: Contact header stays strictly local; AI providers (OpenAI Sign in with ChatGPT or Google Gemini API) only receive scrubbed CV structure.",
+            "- **Master CV Import (DOCX & PDF)**: Import existing CVs with automatic section/entry detection, strict No-PII contact-header exclusion, and interactive line-by-line verification before saving.",
             "- **Job Discovery & One-Click Tailoring**: Generate search profiles per CV, filter live listings by country/freshness/remote, and tailor targeted CV variations in one click.",
             "- **Native Typst PDF Export**: Instant live preview and crisp ATS-friendly PDF generation with bundled Libertinus Serif fonts.",
             "",

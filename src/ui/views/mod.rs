@@ -1,4 +1,5 @@
 pub mod editor;
+pub mod import_modal;
 pub mod jobs;
 pub mod library;
 pub mod modals;

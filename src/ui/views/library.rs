@@ -4,7 +4,7 @@ use gpui::*;
 
 use crate::contracts::CvDocument;
 use crate::ui::components::ui::{
-    ButtonVariant, IconName, el_id, render_button, render_empty_state, render_icon,
+    ButtonVariant, IconName, el_id, render_brand_logo_badge, render_button, render_empty_state, render_icon,
     render_icon_button,
 };
 use crate::ui::theme::Theme;
@@ -130,18 +130,42 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                             "A complete career record. A considered CV for every opportunity.",
                         )),
                 )
-                .child(render_button(
-                    "new-master-top-btn",
-                    "New master CV",
-                    Some(IconName::Plus),
-                    ButtonVariant::Primary,
-                    false,
-                    theme,
-                    cx.listener(|this, _, _, cx| {
-                        this.open_new_master_dialog(cx);
-                        cx.notify();
-                    }),
-                )),
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(render_button(
+                            "import-master-top-btn",
+                            if workspace.import_loading {
+                                "Reading CV…"
+                            } else {
+                                "Import DOCX / PDF"
+                            },
+                            Some(IconName::Download),
+                            ButtonVariant::Secondary,
+                            workspace.import_loading,
+                            theme,
+                            cx.listener(|this, _, _, cx| {
+                                this.open_import_cv_picker(cx);
+                                cx.notify();
+                            }),
+                        ))
+                        .child(render_button(
+                            "new-master-top-btn",
+                            "New master CV",
+                            Some(IconName::Plus),
+                            ButtonVariant::Primary,
+                            false,
+                            theme,
+                            cx.listener(|this, _, _, cx| {
+                                this.open_new_master_dialog(cx);
+                                cx.notify();
+                            }),
+                        )),
+                ),
         )
         // Toolbar: Filter pills, Search, Sort
         .child(
@@ -371,29 +395,54 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                             },
                         )
                         .when(!has_results, |el| {
-                            let (icon, title, subtitle) = if workspace.documents.is_empty() {
-                                (
-                                    IconName::File,
-                                    "No CVs in your workspace yet",
-                                    "Click \"New master CV\" above to create one, or import a .vanguard archive in Settings.",
-                                )
-                            } else if workspace.library_filter == LibraryFilter::Variations
-                                && variations.is_empty()
-                                && query.is_empty()
-                            {
-                                (
-                                    IconName::Branch,
-                                    "No variations yet",
-                                    "Create a tailored variation from any master CV to target a specific role.",
+                            if workspace.documents.is_empty() {
+                                el.child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .justify_center()
+                                        .py(px(52.0))
+                                        .px(px(24.0))
+                                        .gap(px(14.0))
+                                        .child(render_brand_logo_badge(76.0, 68.0, 18.0, theme))
+                                        .child(
+                                            div()
+                                                .text_size(px(17.0))
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(theme.text)
+                                                .text_center()
+                                                .child("No CVs in your workspace yet"),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(13.0))
+                                                .text_color(theme.secondary)
+                                                .max_w(px(440.0))
+                                                .text_center()
+                                                .child("Click \"New master CV\" to start fresh, or \"Import DOCX / PDF\" to import an existing CV with guided verification."),
+                                        ),
                                 )
                             } else {
-                                (
-                                    IconName::Search,
-                                    "No matching CVs found",
-                                    "Try adjusting your search query or switching filters.",
-                                )
-                            };
-                            el.child(render_empty_state(icon, title, subtitle, theme))
+                                let (icon, title, subtitle) = if workspace.library_filter
+                                    == LibraryFilter::Variations
+                                    && variations.is_empty()
+                                    && query.is_empty()
+                                {
+                                    (
+                                        IconName::Branch,
+                                        "No variations yet",
+                                        "Create a tailored variation from any master CV to target a specific role.",
+                                    )
+                                } else {
+                                    (
+                                        IconName::Search,
+                                        "No matching CVs found",
+                                        "Try adjusting your search query or switching filters.",
+                                    )
+                                };
+                                el.child(render_empty_state(icon, title, subtitle, theme))
+                            }
                         }),
                 ),
         )

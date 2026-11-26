@@ -35,9 +35,10 @@ use crate::db::archive;
 use crate::db::lineage_diff::{self, ItemDiff};
 use crate::db::snapshots;
 use crate::db::sync::DebouncedSaver;
+use crate::importer::{ImportDraft, ImportLineRole, ImportSectionKind};
 use crate::pdf::exporter;
 use crate::ui::components::ui::{
-    ButtonVariant, IconName, el_id, render_button, render_icon, render_icon_button,
+    ButtonVariant, IconName, el_id, render_brand_logo_badge, render_button, render_icon, render_icon_button,
 };
 use crate::ui::text_input::{TextInput, TextInputEvent};
 use crate::ui::theme::{self, Theme, ThemeMode};
@@ -112,6 +113,7 @@ pub enum LibrarySort {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Dialog {
     NewMaster,
+    ImportCv,
     NewVariation {
         root_id: DocumentId,
     },
@@ -643,6 +645,11 @@ pub struct WorkspaceView {
     pub update_downloaded: Option<DownloadedUpdate>,
     pub update_error: Option<String>,
     pub update_generation: u64,
+    pub import_draft: Option<ImportDraft>,
+    pub import_title_input: Entity<TextInput>,
+    pub import_loading: bool,
+    pub import_lines_scroll: ScrollHandle,
+    pub import_preview_scroll: ScrollHandle,
     pub _search_sub: Subscription,
     pub _model_filter_sub: Subscription,
     pub _job_query_sub: Subscription,
@@ -703,6 +710,8 @@ impl WorkspaceView {
         // Create text inputs
         let master_title_input =
             cx.new(|cx| TextInput::new(cx).with_placeholder("e.g., Principal Security Engineer"));
+        let import_title_input =
+            cx.new(|cx| TextInput::new(cx).with_placeholder("Imported Master CV title"));
         let variation_company_input =
             cx.new(|cx| TextInput::new(cx).with_placeholder("e.g., CrowdStrike"));
         let variation_role_input =
@@ -983,6 +992,11 @@ impl WorkspaceView {
             update_downloaded: None,
             update_error: None,
             update_generation: 0,
+            import_draft: None,
+            import_title_input,
+            import_loading: false,
+            import_lines_scroll: ScrollHandle::new(),
+            import_preview_scroll: ScrollHandle::new(),
             _search_sub,
             _model_filter_sub,
             _job_query_sub,
@@ -1425,6 +1439,9 @@ impl WorkspaceView {
     }
 
     pub fn close_dialog(&mut self) {
+        if matches!(self.active_dialog, Some(Dialog::ImportCv)) {
+            self.import_draft = None;
+        }
         self.active_dialog = None;
     }
 
@@ -1522,6 +1539,173 @@ impl WorkspaceView {
             }
             Err(err) => {
                 self.notify_error(format!("Failed to create Master CV: {err}"));
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Master CV Importer (.docx & .pdf) with Interactive Verification
+    // -----------------------------------------------------------------------
+
+    pub fn open_import_cv_picker(&mut self, cx: &mut Context<Self>) {
+        if self.import_loading {
+            return;
+        }
+        let paths_rx = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Import Master CV (.docx or .pdf)".into()),
+        });
+
+        cx.spawn(async move |this, cx| {
+            let path = match paths_rx.await {
+                Ok(Ok(Some(mut paths))) => {
+                    if let Some(p) = paths.pop() {
+                        p
+                    } else {
+                        return;
+                    }
+                }
+                Ok(Ok(None)) | Err(_) => return,
+                Ok(Err(err)) => {
+                    let _ = this.update(cx, |view, cx| {
+                        view.notify_error(format!("Could not open file picker: {err}"));
+                        cx.notify();
+                    });
+                    return;
+                }
+            };
+
+            let _ = this.update(cx, |view, cx| {
+                view.import_loading = true;
+                view.notify("Parsing CV document for verification…");
+                cx.notify();
+            });
+
+            let parsed = cx
+                .background_executor()
+                .spawn(async move { ImportDraft::from_file(&path) })
+                .await;
+
+            let _ = this.update(cx, |view, cx| {
+                view.import_loading = false;
+                match parsed {
+                    Ok(draft) => {
+                        let suggested_title = draft.suggested_title.clone();
+                        view.import_title_input.update(cx, |input, cx| {
+                            input.set_value(suggested_title);
+                            cx.notify();
+                        });
+                        view.import_lines_scroll.set_offset(point(px(0.0), px(0.0)));
+                        view.import_preview_scroll
+                            .set_offset(point(px(0.0), px(0.0)));
+                        view.import_draft = Some(draft);
+                        view.active_dialog = Some(Dialog::ImportCv);
+                        view.clear_notice();
+                    }
+                    Err(err) => {
+                        view.notify_error(format!("Could not import CV: {err}"));
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub fn set_import_line_role(&mut self, index: usize, role: ImportLineRole) {
+        if let Some(draft) = self.import_draft.as_mut() {
+            draft.set_line_role(index, role);
+        }
+    }
+
+    pub fn set_import_section_kind(&mut self, index: usize, kind: ImportSectionKind) {
+        if let Some(draft) = self.import_draft.as_mut() {
+            draft.set_section_kind(index, kind);
+        }
+    }
+
+    pub fn merge_import_line_up(&mut self, index: usize) {
+        if let Some(draft) = self.import_draft.as_mut() {
+            draft.merge_line_up(index);
+        }
+    }
+
+    pub fn skip_import_header_lines(&mut self) {
+        if let Some(draft) = self.import_draft.as_mut() {
+            draft.skip_all_above_first_section();
+        }
+    }
+
+    pub fn reset_import_auto_detect(&mut self) {
+        if let Some(draft) = self.import_draft.as_mut() {
+            draft.reset_to_auto();
+        }
+    }
+
+    pub fn scroll_import_lines_by(&mut self, dy: Pixels, cx: &mut Context<Self>) {
+        let cur = self.import_lines_scroll.offset();
+        let max_y = self.import_lines_scroll.max_offset().height;
+        if max_y <= px(0.5) {
+            return;
+        }
+        let next_y = (cur.y + dy).clamp(-max_y, px(0.0));
+        if (next_y - cur.y).abs() > px(0.1) {
+            self.import_lines_scroll.set_offset(point(cur.x, next_y));
+            cx.notify();
+        }
+    }
+
+    pub fn scroll_import_preview_by(&mut self, dy: Pixels, cx: &mut Context<Self>) {
+        let cur = self.import_preview_scroll.offset();
+        let max_y = self.import_preview_scroll.max_offset().height;
+        if max_y <= px(0.5) {
+            return;
+        }
+        let next_y = (cur.y + dy).clamp(-max_y, px(0.0));
+        if (next_y - cur.y).abs() > px(0.1) {
+            self.import_preview_scroll.set_offset(point(cur.x, next_y));
+            cx.notify();
+        }
+    }
+
+    pub fn confirm_import_master_cv(&mut self, cx: &mut Context<Self>) {
+        let Some(draft) = self.import_draft.as_ref() else {
+            return;
+        };
+        let stats = draft.stats();
+        if stats.sections == 0 {
+            self.notify_error("Mark at least one line as a Section before importing.");
+            return;
+        }
+
+        let title = self.import_title_input.read(cx).text().trim().to_string();
+        let built = draft.build_master_document(title);
+        let final_title = built.title.clone();
+
+        // Personal info header is ALWAYS blank (`PiiContactHeader::default()`);
+        // users enter contact details manually in Personal info.
+        match self
+            .services
+            .repository
+            .create_root(&built.title, built.pii_header, built.body)
+        {
+            Ok(doc) => {
+                let doc_id = doc.id;
+                self.documents.push(doc);
+                self.active_doc_id = Some(doc_id);
+                self.current_view = WorkspaceViewPage::Editor;
+                self.active_dialog = None;
+                self.import_draft = None;
+                self.refresh_snapshots();
+                self.trigger_pdf_preview_render(cx);
+                self.notify(format!(
+                    "Imported \"{final_title}\" as a Master CV. Enter your personal details in Personal info."
+                ));
+            }
+            Err(err) => {
+                self.notify_error(format!("Failed to save imported Master CV: {err}"));
             }
         }
     }
@@ -5609,6 +5793,8 @@ impl WorkspaceView {
         self.update_release = None;
         self.update_downloaded = None;
         self.update_error = None;
+        self.import_draft = None;
+        self.import_loading = false;
 
         // Reset theme & search inputs.
         self.library_query.clear();
@@ -6186,6 +6372,28 @@ impl Render for WorkspaceView {
                                             cx.notify();
                                         }),
                                     ))
+                                    .when(!show_sidebar, |el| {
+                                        el.child(
+                                            div()
+                                                .id("topbar-brand-btn")
+                                                .cursor_pointer()
+                                                .flex_shrink_0()
+                                                .rounded(px(8.0))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.navigate_to(
+                                                        WorkspaceViewPage::Library,
+                                                        cx,
+                                                    );
+                                                    cx.notify();
+                                                }))
+                                                .child(render_brand_logo_badge(
+                                                    32.0,
+                                                    27.0,
+                                                    8.0,
+                                                    &theme,
+                                                )),
+                                        )
+                                    })
                                     .when(!is_narrow, |el| {
                                         el.child(
                                             div()

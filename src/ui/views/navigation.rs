@@ -2,8 +2,8 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::contracts::CvDocument;
-use crate::ui::components::ui::{IconName, render_icon};
-use crate::ui::theme::Theme;
+use crate::ui::components::ui::{IconName, render_brand_logo_badge, render_icon};
+use crate::ui::theme::{Theme, ThemeMode};
 use crate::ui::workspace::{WorkspaceView, WorkspaceViewPage};
 use crate::updater::UpdateStatus;
 
@@ -21,10 +21,16 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
         .count();
     let ai_running = workspace.ai_state.is_running;
 
-    let sidebar_w = if workspace.viewport_width < 1020.0 {
-        px(204.0)
+    let is_compact = workspace.viewport_width < 1020.0;
+    let sidebar_w = if is_compact { px(204.0) } else { px(228.0) };
+    let (brand_tile_size, brand_logo_size, brand_radius) = if is_compact {
+        (48.0, 42.0, 11.0)
     } else {
-        px(228.0)
+        (54.0, 48.0, 13.0)
+    };
+    let brand_cv_accent = match theme.mode {
+        ThemeMode::Dark => rgb(0xe44b5a),
+        ThemeMode::Light => theme.accent,
     };
 
     div()
@@ -38,56 +44,64 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
         .bg(theme.surface_soft)
         .border_r_1()
         .border_color(theme.border)
-        .pt(px(24.0))
+        .pt(px(16.0))
         .pb(px(20.0))
         .px(px(14.0))
         // Brand
         .child(
             div()
-                .id("brand-btn")
-                .cursor_pointer()
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .pb(px(24.0))
+                .pb(px(16.0))
                 .border_b_1()
                 .border_color(theme.border_soft)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.navigate_to(WorkspaceViewPage::Library, cx);
-                    cx.notify();
-                }))
                 .child(
                     div()
+                        .id("brand-btn")
+                        .cursor_pointer()
                         .flex()
-                        .flex_shrink_0()
                         .items_center()
-                        .justify_center()
-                        .size(px(36.0))
-                        .child(
-                            img("branding/logo.png")
-                                .size(px(36.0))
-                                .object_fit(ObjectFit::Contain),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
+                        .gap(if is_compact { px(9.0) } else { px(11.0) })
+                        .px(px(6.0))
+                        .py(px(6.0))
+                        .mx(px(-6.0))
+                        .rounded(px(10.0))
+                        .hover(|s| s.bg(theme.hover))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.navigate_to(WorkspaceViewPage::Library, cx);
+                            cx.notify();
+                        }))
+                        .child(render_brand_logo_badge(
+                            brand_tile_size,
+                            brand_logo_size,
+                            brand_radius,
+                            theme,
+                        ))
                         .child(
                             div()
+                                .flex_1()
+                                .min_w_0()
                                 .flex()
-                                .items_center()
-                                .font_weight(FontWeight::BOLD)
-                                .text_size(px(14.0))
-                                .text_color(theme.text)
-                                .child("Vanguard")
-                                .child(div().text_color(theme.accent).child("CV")),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(11.0))
-                                .text_color(theme.muted)
-                                .child("Your career workspace"),
+                                .flex_col()
+                                .gap(px(2.0))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .font_weight(FontWeight::EXTRA_BOLD)
+                                        .text_size(if is_compact { px(15.5) } else { px(17.0) })
+                                        .line_height(px(20.0))
+                                        .text_color(theme.text)
+                                        .child("Vanguard")
+                                        .child(div().text_color(brand_cv_accent).child("CV")),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(if is_compact { px(10.5) } else { px(11.0) })
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(theme.secondary)
+                                        .whitespace_nowrap()
+                                        .overflow_hidden()
+                                        .child("Your career workspace"),
+                                ),
                         ),
                 ),
         )

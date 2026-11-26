@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/logo.png" alt="VanguardCV logo" width="96" height="96" />
+  <img src="assets/branding/logo.png" alt="VanguardCV logo" width="140" height="140" />
 </p>
 
 <h1 align="center">VanguardCV</h1>
@@ -14,6 +14,7 @@
 ## Features
 
 - **Master → Variation CV Lineage:** Keep protected master CVs in a local SQLite database and create tailored job-specific variations without touching your master record.
+- **Master CV Import (.docx & .pdf):** Import existing Word or PDF CVs with automatic structure detection (including VanguardCV's own PDF layout), strict contact-header PII exclusion, and an interactive line-by-line verification screen before saving.
 - **Zero-Trust PII Air-Gap:** Your name, email, phone, location, and personal links stay strictly local on your device and are stripped before any AI request is sent.
 - **Flexible AI Providers:** Connect using official **Sign in with ChatGPT** (OAuth 2.0 + PKCE) or your own **Google Gemini API** key stored securely in the Windows Credential Manager (never in SQLite).
 - **Job Discovery Tab:** Generate PII-stripped role search profiles per CV, browse live job postings filtered by country, freshness, and remote options, and launch one-click AI CV tailoring.
@@ -27,10 +28,10 @@
 
 Download the latest signed-checksum Windows installer from [**GitHub Releases**](https://github.com/omertawfig/VanguardCV/releases/latest):
 
-1. Run `VanguardCV-Setup-0.0.1-x64.exe` (per-user installer; installs to `%LOCALAPPDATA%\Programs\VanguardCV`).
+1. Run `VanguardCV-Setup-0.0.2-x64.exe` (per-user installer; installs to `%LOCALAPPDATA%\Programs\VanguardCV`).
 2. Verify checksum (optional):
    ```powershell
-   Get-FileHash .\VanguardCV-Setup-0.0.1-x64.exe -Algorithm SHA256
+   Get-FileHash .\VanguardCV-Setup-0.0.2-x64.exe -Algorithm SHA256
    ```
 3. Future updates can be checked, downloaded, and applied automatically from **Settings → Software updates** (toggle **Automatic updates** on or off at any time).
 
@@ -65,6 +66,7 @@ src/
   credentials.rs Windows Credential Manager / private local token storage
   updater.rs     GitHub Releases auto-updater with SHA-256 checksum verification
   db/            SQLite storage, lineage diffing, debounced sync, snapshots
+  importer/      DOCX/PDF text extraction, No-PII header exclusion, line classifier
   privacy/       Aho-Corasick + regex PII scrubber
   ai/            ChatGPT OAuth & Google Gemini clients, skills, proposal diffs
   jobs/          PII-stripped search profiles, Freehire provider, external board links

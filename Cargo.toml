@@ -5,7 +5,7 @@ ui = []
 
 [package]
 name = "vanguard-cv"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.90"
 authors = ["Omer Tawfig"]
@@ -70,11 +70,14 @@ dirs = "7"
 regex = "1"
 aho-corasick = "1.1"
 
-# PDF compilation
+# PDF compilation & CV import (DOCX / PDF)
 typst = "0.15"
 typst-layout = "0.15"
 typst-pdf = "0.15"
 typst-render = "0.15"
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+roxmltree = "0.21"
+pdf-extract = "0.12"
 
 # Diffing, images, utilities
 similar = "3"
