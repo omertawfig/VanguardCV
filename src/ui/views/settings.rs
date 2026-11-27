@@ -3,7 +3,8 @@ use gpui::*;
 
 use crate::contracts::{AiProviderKind, ChatGptAuthStatus, ModelInfo};
 use crate::ui::components::ui::{
-    ButtonVariant, IconName, el_id, render_button, render_icon, render_icon_button, render_toggle,
+    ButtonVariant, IconName, el_id, render_button, render_decorated_input_box, render_icon,
+    render_icon_button, render_toggle,
 };
 use crate::ui::theme::{Theme, ThemeMode};
 use crate::ui::workspace::WorkspaceView;
@@ -64,14 +65,14 @@ pub fn render_settings_view(workspace: &WorkspaceView, cx: &mut Context<Workspac
                         .gap(px(4.0))
                         .child(
                             div()
-                                .text_size(px(26.0))
+                                .text_size(px(24.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child("Settings"),
                         )
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .line_height(px(20.0))
                                 .text_color(theme.secondary)
                                 .child(
@@ -131,7 +132,7 @@ fn render_section_header(
                         .gap(px(3.0))
                         .child(
                             div()
-                                .text_size(px(15.0))
+                                .text_size(px(16.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child(title.to_string()),
@@ -156,14 +157,15 @@ fn render_section_header(
 fn render_status_pill(label: &'static str, bg: Rgba, fg: Rgba, border: Rgba) -> Div {
     div()
         .flex_shrink_0()
-        .px(px(7.0))
-        .py(px(2.0))
-        .rounded(px(4.0))
+        .px(px(9.0))
+        .py(px(2.5))
+        .rounded_full()
+        .whitespace_nowrap()
         .bg(bg)
         .border_1()
         .border_color(border)
-        .text_size(px(10.0))
-        .font_weight(FontWeight::BOLD)
+        .text_size(px(11.0))
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(fg)
         .child(label)
 }
@@ -188,7 +190,7 @@ fn render_privacy_callout(inner_w: f32, text: &'static str, theme: &Theme) -> Di
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(11.5))
+                .text_size(px(12.0))
                 .line_height(px(17.0))
                 .text_color(theme.secondary)
                 .child(text),
@@ -332,14 +334,14 @@ fn render_theme_option_card(
                         .gap(px(2.0))
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
                                 .child(title),
                         )
                         .child(
                             div()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .line_height(px(16.0))
                                 .text_color(theme.muted)
                                 .child(subtitle),
@@ -542,7 +544,7 @@ fn render_provider_card(
                         .gap(px(8.0))
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
                                 .child(title),
@@ -556,7 +558,7 @@ fn render_provider_card(
                 )
                 .child(
                     div()
-                        .text_size(px(11.5))
+                        .text_size(px(12.0))
                         .line_height(px(16.5))
                         .text_color(theme.muted)
                         .child(subtitle),
@@ -611,7 +613,7 @@ fn render_chatgpt_panel(
                         .gap(px(3.0))
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
                                 .child("Use your ChatGPT plan"),
@@ -790,7 +792,7 @@ fn render_chatgpt_panel(
                             )
                             .child(
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .line_height(px(16.5))
                                     .text_color(theme.muted)
                                     .child(if chatgpt_ready {
@@ -913,7 +915,7 @@ fn render_gemini_panel(
                         .gap(px(3.0))
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
                                 .child("Google Gemini API key"),
@@ -950,24 +952,17 @@ fn render_gemini_panel(
                 .when(!stack_input_row, |el| el.flex_row().items_center())
                 .gap(px(8.0))
                 .child(
-                    div()
-                        .when(!stack_input_row, |el| el.flex_1().min_w_0())
-                        .when(stack_input_row, |el| el.w(px(inner_w)))
-                        .h(px(34.0))
-                        .px(px(10.0))
-                        .flex()
-                        .items_center()
-                        .rounded(px(5.0))
-                        .bg(theme.input)
-                        .border_1()
-                        .border_color(theme.border)
-                        .overflow_hidden()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .child(workspace.gemini_api_key_input.clone()),
-                        ),
+                    render_decorated_input_box(
+                        workspace.gemini_api_key_input.clone(),
+                        34.0,
+                        None,
+                        None,
+                        None,
+                        theme,
+                        cx,
+                    )
+                    .when(!stack_input_row, |el| el.flex_1())
+                    .when(stack_input_row, |el| el.w(px(inner_w))),
                 )
                 .child(
                     div()
@@ -1147,27 +1142,12 @@ fn render_models_panel(
         // Filter input when many models are returned
         .when(show_model_filter, |el| {
             el.child(
-                div()
-                    .w(px(inner_w))
-                    .h(px(34.0))
-                    .px(px(10.0))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .rounded(px(5.0))
-                    .bg(theme.input)
-                    .border_1()
-                    .border_color(theme.border)
-                    .overflow_hidden()
-                    .child(render_icon(IconName::Search, 14.0, theme.muted))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(workspace.model_filter_input.clone()),
-                    )
-                    .when(!workspace.model_filter_query.is_empty(), |row| {
-                        row.child(render_icon_button(
+                render_decorated_input_box(
+                    workspace.model_filter_input.clone(),
+                    34.0,
+                    Some(IconName::Search),
+                    (!workspace.model_filter_query.is_empty()).then(|| {
+                        render_icon_button(
                             "clear-model-filter-btn",
                             IconName::Close,
                             "Clear model filter",
@@ -1177,8 +1157,14 @@ fn render_models_panel(
                                 this.clear_model_filter(cx);
                                 cx.notify();
                             }),
-                        ))
+                        )
+                        .into_any_element()
                     }),
+                    None,
+                    theme,
+                    cx,
+                )
+                .w(px(inner_w)),
             )
         })
         // Model list or placeholder state
@@ -1210,14 +1196,14 @@ fn render_models_panel(
                 .border_color(theme.border_soft)
                 .child(
                     div()
-                        .text_size(px(12.5))
+                        .text_size(px(13.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.text)
                         .child(format!("Selected model: {selected_model}")),
                 )
                 .child(
                     div()
-                        .text_size(px(11.5))
+                        .text_size(px(12.0))
                         .line_height(px(16.5))
                         .text_color(theme.muted)
                         .child(match (active_provider, active_ready) {
@@ -1391,7 +1377,7 @@ fn render_models_panel(
                                                                                     theme
                                                                                         .border_soft,
                                                                                 )
-                                                                                .text_size(px(10.0))
+                                                                                .text_size(px(11.0))
                                                                                 .text_color(
                                                                                     theme.secondary,
                                                                                 )
@@ -1403,7 +1389,7 @@ fn render_models_panel(
                                                         .when(!desc.is_empty(), |col| {
                                                             col.child(
                                                                 div()
-                                                                    .text_size(px(11.5))
+                                                                    .text_size(px(12.0))
                                                                     .line_height(px(16.0))
                                                                     .text_color(theme.muted)
                                                                     .child(desc),
@@ -1604,7 +1590,7 @@ fn render_updates_card(
     let mut card = div()
         .w(px(card_w))
         .p(px(20.0))
-        .rounded(px(10.0))
+        .rounded(px(8.0))
         .bg(theme.surface)
         .border_1()
         .border_color(theme.border)
@@ -1630,7 +1616,7 @@ fn render_updates_card(
                 })
                 .gap(px(12.0))
                 .p(px(14.0))
-                .rounded(px(8.0))
+                .rounded(px(6.0))
                 .bg(theme.input)
                 .border_1()
                 .border_color(theme.border_soft)
@@ -1650,7 +1636,7 @@ fn render_updates_card(
                         )
                         .child(
                             div()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .line_height(px(16.5))
                                 .text_color(theme.muted)
                                 .child(
@@ -1666,7 +1652,7 @@ fn render_updates_card(
                         .gap(px(8.0))
                         .child(
                             div()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(if workspace.auto_update_enabled {
                                     theme.text
@@ -1694,6 +1680,9 @@ fn render_updates_card(
         .child(
             div()
                 .w(px(inner_w))
+                .pt(px(14.0))
+                .border_t_1()
+                .border_color(theme.border_soft)
                 .flex()
                 .when(stack_rows, |el| el.flex_col().items_start())
                 .when(!stack_rows, |el| {
@@ -1716,7 +1705,7 @@ fn render_updates_card(
                         )
                         .child(
                             div()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .line_height(px(16.5))
                                 .text_color(if matches!(workspace.update_status, UpdateStatus::Error(_)) {
                                     theme.del_text
@@ -1785,7 +1774,7 @@ fn render_updates_card(
                         ))
                         .child(render_button(
                             "settings-open-releases-btn",
-                            "Releases",
+                            "View releases",
                             Some(IconName::Arrow),
                             ButtonVariant::Ghost,
                             false,
@@ -1826,7 +1815,7 @@ fn render_updates_card(
                 )
                 .child(
                     div()
-                        .text_size(px(11.5))
+                        .text_size(px(12.0))
                         .line_height(px(17.0))
                         .text_color(theme.secondary)
                         .child(preview),
@@ -1925,7 +1914,7 @@ fn render_data_card(
                         )
                         .child(
                             div()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .line_height(px(16.5))
                                 .text_color(theme.muted)
                                 .child(
@@ -1997,7 +1986,7 @@ fn render_data_card(
                         )
                         .child(
                             div()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .line_height(px(16.5))
                                 .text_color(theme.muted)
                                 .child(
@@ -2090,7 +2079,7 @@ fn render_data_card(
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(11.5))
+                                        .text_size(px(12.0))
                                         .line_height(px(16.5))
                                         .text_color(theme.muted)
                                         .child(if has_active_doc {
@@ -2165,7 +2154,7 @@ fn render_data_card(
                                                 .gap(px(1.0))
                                                 .child(
                                                     div()
-                                                        .text_size(px(12.5))
+                                                        .text_size(px(13.0))
                                                         .font_weight(FontWeight::MEDIUM)
                                                         .text_color(theme.text)
                                                         .child(snap.reason.clone()),
@@ -2256,7 +2245,7 @@ fn render_data_card(
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(11.5))
+                                        .text_size(px(12.0))
                                         .line_height(px(16.5))
                                         .text_color(theme.text)
                                         .child(

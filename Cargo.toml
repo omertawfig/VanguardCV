@@ -1,11 +1,11 @@
 [features]
-default = []
+default = ["ui"]
 # Compiles the GPUI binary entry point.
 ui = []
 
 [package]
 name = "vanguard-cv"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 rust-version = "1.90"
 authors = ["Omer Tawfig"]
@@ -58,7 +58,7 @@ base64 = "0.22"
 sha2 = "0.10"
 url = "2"
 rand = "0.9"
-open = "5"
+open = { version = "5", features = ["shellexecute-on-windows"] }
 jsonwebtoken = "9"
 
 # Skills configuration
@@ -93,6 +93,17 @@ keyring = "4"
 # Pinned: gpui_http_client -> zed-async-tar -> xattr 0.2.3 still references
 # libc::ENOATTR, which libc removed in 0.2.190. Remove once gpui updates.
 libc = "=0.2.185"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+    "Win32_UI_Controls_Dialogs",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [dev-dependencies]
 tempfile = "3"

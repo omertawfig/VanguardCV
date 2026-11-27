@@ -49,14 +49,14 @@ pub fn render_privacy_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                         .gap(px(4.0))
                         .child(
                             div()
-                                .text_size(px(26.0))
+                                .text_size(px(24.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child("Personal information"),
                         )
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .text_color(theme.secondary)
                                 .child(
                                     "Your identity stays separate from the career content AI can see.",
@@ -70,7 +70,7 @@ pub fn render_privacy_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                         .gap(px(6.0))
                         .px(px(8.0))
                         .py(px(4.0))
-                        .rounded(px(5.0))
+                        .rounded(px(6.0))
                         .bg(theme.accent_soft)
                         .text_color(theme.accent_text)
                         .text_size(px(12.0))
@@ -123,7 +123,7 @@ pub fn render_privacy_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                                                 .gap(px(2.0))
                                                 .child(
                                                     div()
-                                                        .text_size(px(15.0))
+                                                        .text_size(px(16.0))
                                                         .font_weight(FontWeight::BOLD)
                                                         .text_color(theme.text)
                                                         .child("Contact details"),
@@ -211,7 +211,7 @@ pub fn render_privacy_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                                                 .gap(px(2.0))
                                                 .child(
                                                     div()
-                                                        .text_size(px(15.0))
+                                                        .text_size(px(16.0))
                                                         .font_weight(FontWeight::BOLD)
                                                         .text_color(theme.text)
                                                         .child("Social & portfolio links"),
@@ -430,7 +430,7 @@ pub fn render_privacy_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                                                 .gap(px(2.0))
                                                 .child(
                                                     div()
-                                                        .text_size(px(15.0))
+                                                        .text_size(px(16.0))
                                                         .font_weight(FontWeight::BOLD)
                                                         .text_color(theme.text)
                                                         .child("Custom header fields"),
@@ -655,7 +655,7 @@ pub fn render_privacy_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(12.5))
+                                        .text_size(px(13.0))
                                         .line_height(px(18.0))
                                         .text_color(theme.secondary)
                                         .child("Personal information is kept strictly local on your machine. When AI analyzes your CV, your name, contact data, and custom identifiers are scrubbed completely before any transmission."),
@@ -668,7 +668,7 @@ pub fn render_privacy_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                                         .flex_wrap()
                                         .gap(px(8.0))
                                         .p(px(10.0))
-                                        .rounded(px(5.0))
+                                        .rounded(px(6.0))
                                         .bg(theme.input)
                                         .border_1()
                                         .border_color(theme.border_soft)
@@ -732,7 +732,7 @@ fn render_field_row(label: &str, value: &str, theme: &Theme) -> Div {
         .child(
             div()
                 .flex_shrink_0()
-                .text_size(px(12.5))
+                .text_size(px(13.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.secondary)
                 .child(label.to_string()),
@@ -772,14 +772,14 @@ fn render_privacy_no_document_state(
                 .gap(px(4.0))
                 .child(
                     div()
-                        .text_size(px(26.0))
+                        .text_size(px(24.0))
                         .font_weight(FontWeight::BOLD)
                         .text_color(theme.text)
                         .child("Personal information"),
                 )
                 .child(
                     div()
-                        .text_size(px(13.5))
+                        .text_size(px(14.0))
                         .text_color(theme.secondary)
                         .child("Your identity stays separate from the career content AI can see."),
                 ),
@@ -802,7 +802,7 @@ fn render_privacy_no_document_state(
                         .child(render_icon(IconName::Shield, 18.0, theme.accent))
                         .child(
                             div()
-                                .text_size(px(15.0))
+                                .text_size(px(16.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child("Select a CV to edit its contact header"),
@@ -833,7 +833,7 @@ fn render_privacy_no_document_state(
                                     .gap(px(10.0))
                                     .px(px(12.0))
                                     .py(px(9.0))
-                                    .rounded(px(5.0))
+                                    .rounded(px(6.0))
                                     .bg(theme.input)
                                     .border_1()
                                     .border_color(theme.border_soft)

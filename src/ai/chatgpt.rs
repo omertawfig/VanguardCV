@@ -1138,7 +1138,7 @@ impl AiOrchestrator for ChatGptClient {
             fresh_registration,
             OAUTH_CALLBACK_TIMEOUT,
             |url| async move {
-                open::that(&url).map_err(|err| {
+                crate::platform::open_external_url(&url).map_err(|err| {
                     anyhow!("Could not open your system browser for Sign in with ChatGPT: {err}")
                 })
             },

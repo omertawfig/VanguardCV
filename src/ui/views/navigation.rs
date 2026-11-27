@@ -3,7 +3,7 @@ use gpui::*;
 
 use crate::contracts::CvDocument;
 use crate::ui::components::ui::{IconName, render_brand_logo_badge, render_icon};
-use crate::ui::theme::{Theme, ThemeMode};
+use crate::ui::theme::{RADIUS_MD, TEXT_XS, Theme};
 use crate::ui::workspace::{WorkspaceView, WorkspaceViewPage};
 use crate::updater::UpdateStatus;
 
@@ -28,10 +28,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
     } else {
         (54.0, 48.0, 13.0)
     };
-    let brand_cv_accent = match theme.mode {
-        ThemeMode::Dark => rgb(0xe44b5a),
-        ThemeMode::Light => theme.accent,
-    };
+    let brand_cv_accent = theme.brand_badge_accent;
 
     div()
         .id("sidebar")
@@ -63,7 +60,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                         .px(px(6.0))
                         .py(px(6.0))
                         .mx(px(-6.0))
-                        .rounded(px(10.0))
+                        .rounded(px(8.0))
                         .hover(|s| s.bg(theme.hover))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.navigate_to(WorkspaceViewPage::Library, cx);
@@ -95,11 +92,12 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                                 )
                                 .child(
                                     div()
-                                        .text_size(if is_compact { px(10.5) } else { px(11.0) })
+                                        .text_size(px(TEXT_XS))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(theme.secondary)
                                         .whitespace_nowrap()
                                         .overflow_hidden()
+                                        .text_ellipsis()
                                         .child("Your career workspace"),
                                 ),
                         ),
@@ -111,7 +109,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                 .pt(px(18.0))
                 .pb(px(6.0))
                 .px(px(6.0))
-                .text_size(px(10.5))
+                .text_size(px(11.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.muted)
                 .child("WORKSPACE"),
@@ -150,7 +148,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                 .pt(px(20.0))
                 .pb(px(6.0))
                 .px(px(6.0))
-                .text_size(px(10.5))
+                .text_size(px(11.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.muted)
                 .child("TOOLS"),
@@ -193,7 +191,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                 .child(
                     div()
                         .px(px(6.0))
-                        .text_size(px(10.5))
+                        .text_size(px(11.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.muted)
                         .child("CURRENT DOCUMENT"),
@@ -245,11 +243,12 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                             .gap(px(6.0))
                             .px(px(8.0))
                             .py(px(5.0))
-                            .rounded(px(5.0))
+                            .rounded(px(RADIUS_MD))
                             .bg(theme.accent_soft)
                             .border_1()
                             .border_color(theme.accent)
-                            .text_size(px(11.0))
+                            .hover(|s| s.border_color(theme.accent_hover))
+                            .text_size(px(TEXT_XS))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.accent_text)
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -272,7 +271,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                             .gap(px(6.0))
                             .px(px(8.0))
                             .py(px(5.0))
-                            .rounded(px(5.0))
+                            .rounded(px(6.0))
                             .bg(theme.accent_soft)
                             .border_1()
                             .border_color(theme.accent)
@@ -280,7 +279,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.accent_text)
                             .child(render_icon(IconName::Sparkles, 12.0, theme.accent))
-                            .child("AI tailoring running…"),
+                            .child("AI tailoring runningâ€¦"),
                     )
                 }),
         )
@@ -332,6 +331,7 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                                 } else {
                                     theme.accent
                                 })
+                                .hover(|s| s.opacity(0.9))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.navigate_to(WorkspaceViewPage::Settings, cx);
                                     cx.notify();
@@ -410,14 +410,14 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                                         .flex_col()
                                         .child(
                                             div()
-                                                .text_size(px(11.5))
+                                                .text_size(px(12.0))
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(theme.text)
                                                 .child("Inspect payload"),
                                         )
                                         .child(
                                             div()
-                                                .text_size(px(10.0))
+                                                .text_size(px(11.0))
                                                 .text_color(theme.muted)
                                                 .child("PII air-gap active"),
                                         ),
@@ -428,10 +428,10 @@ pub fn render_sidebar(workspace: &WorkspaceView, cx: &mut Context<WorkspaceView>
                                 .flex_shrink_0()
                                 .px(px(5.0))
                                 .py(px(1.0))
-                                .rounded(px(3.0))
+                                .rounded(px(4.0))
                                 .bg(theme.accent_soft)
                                 .text_color(theme.accent_text)
-                                .text_size(px(9.5))
+                                .text_size(px(11.0))
                                 .font_weight(FontWeight::BOLD)
                                 .child("SAFE"),
                         ),
@@ -456,7 +456,7 @@ fn render_nav_item(
         .justify_between()
         .h(px(34.0))
         .px(px(8.0))
-        .rounded(px(5.0))
+        .rounded(px(6.0))
         .bg(if is_active {
             theme.hover
         } else {
@@ -499,7 +499,7 @@ fn render_nav_item(
                 div()
                     .px(px(6.0))
                     .py(px(1.0))
-                    .rounded(px(10.0))
+                    .rounded_full()
                     .bg(if is_active {
                         theme.surface
                     } else {
@@ -567,7 +567,7 @@ fn render_document_selector(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_size(px(12.5))
+                        .text_size(px(13.0))
                         .font_weight(if has_doc {
                             FontWeight::SEMIBOLD
                         } else {

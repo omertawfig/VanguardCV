@@ -29,7 +29,7 @@ pub use provider::{
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -355,7 +355,10 @@ mod tests {
             s2.write_all(resp.as_bytes()).await.expect("write 2");
         });
 
-        let provider = FreehireProvider::new(format!("http://{addr}/api/v1"));
+        let provider = FreehireProvider::with_retry_base_delay(
+            format!("http://{addr}/api/v1"),
+            Duration::from_millis(10),
+        );
         let profiles = vec![SearchProfile::new(
             "p1",
             "Primary Role",
@@ -410,5 +413,124 @@ mod tests {
             "https://freehire.me/jobs/older-yesterday-role"
         );
         assert!(result.jobs[2].preview.contains("Own security reviews."));
+    }
+
+    #[tokio::test]
+    async fn freehire_provider_recovers_from_truncated_stream_429_and_endpoint_fallback() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let addr = listener.local_addr().expect("addr");
+
+        let server = tokio::spawn(async move {
+            let mut buf = vec![0u8; 4096];
+
+            // Attempt 1 on /agent/jobs/search: truncated JSON stream (Connection reset / short body)
+            let (mut s1, _) = listener.accept().await.expect("accept 1");
+            let _ = s1.read(&mut buf).await.expect("read 1");
+            let truncated = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"data\":[{\"public_slug\":\"cut";
+            s1.write_all(truncated.as_bytes()).await.expect("write 1");
+            drop(s1);
+
+            // Attempt 2 on /agent/jobs/search: HTTP 429 with Retry-After: 0
+            let (mut s2, _) = listener.accept().await.expect("accept 2");
+            let _ = s2.read(&mut buf).await.expect("read 2");
+            let resp_429 = "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            s2.write_all(resp_429.as_bytes()).await.expect("write 2");
+            drop(s2);
+
+            // Attempt 3 on /agent/jobs/search: HTTP 502 Bad Gateway -> exhausts primary retries
+            let (mut s3, _) = listener.accept().await.expect("accept 3");
+            let _ = s3.read(&mut buf).await.expect("read 3");
+            let resp_502 =
+                "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            s3.write_all(resp_502.as_bytes()).await.expect("write 3");
+            drop(s3);
+
+            // Attempt 4: automatic fallback to standard `/jobs/search` succeeds!
+            let (mut s4, _) = listener.accept().await.expect("accept 4");
+            let n = s4.read(&mut buf).await.expect("read 4");
+            let req = String::from_utf8_lossy(&buf[..n]).to_string();
+            assert!(
+                req.contains("GET /api/v1/jobs/search?"),
+                "expected fallback to /jobs/search, got: {req}"
+            );
+            let ok_body = r#"{"data":[{"public_slug":"fallback-sec-1","title":"Security Engineer","company":"Fallback Labs","reality":{"age_days":0}}],"meta":{"total":1}}"#;
+            let resp_ok = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                ok_body.len(),
+                ok_body
+            );
+            s4.write_all(resp_ok.as_bytes()).await.expect("write 4");
+        });
+
+        let provider = FreehireProvider::with_retry_base_delay(
+            format!("http://{addr}/api/v1"),
+            Duration::from_millis(5),
+        );
+        let profiles = vec![SearchProfile::new(
+            "p1",
+            "Primary Role",
+            "Security Engineer",
+            vec!["Rust".to_string()],
+        )];
+        let filters = JobFilters::default();
+
+        let result = provider
+            .search(&profiles, &filters)
+            .await
+            .expect("multi-retry + /jobs/search fallback should recover automatically");
+        server.await.expect("server task");
+
+        assert_eq!(result.jobs.len(), 1);
+        assert_eq!(result.jobs[0].company, "Fallback Labs");
+        assert!(
+            !result.warnings.is_empty(),
+            "fallback endpoint usage should attach an informational warning"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "live network check against freehire.me"]
+    async fn freehire_live_search_recovers_via_doh_alternate_edge() {
+        let provider = FreehireProvider::default();
+        let profiles = vec![SearchProfile::new(
+            "p1",
+            "Primary Role",
+            "Penetration Tester",
+            vec!["Security".to_string()],
+        )];
+        let filters = JobFilters {
+            remote_only: false,
+            country: None,
+            posted_within_days: Some(30),
+            manual_query: String::new(),
+            page: 1,
+            page_size: 10,
+        };
+
+        let t1 = Instant::now();
+        let first = provider
+            .search(&profiles, &filters)
+            .await
+            .expect("first live search should succeed via DoH failover if needed");
+        let elapsed_first = t1.elapsed();
+
+        let t2 = Instant::now();
+        let second = provider
+            .search(&profiles, &filters)
+            .await
+            .expect("second live search should reuse cached working edge");
+        let elapsed_second = t2.elapsed();
+
+        eprintln!(
+            "LIVE_CHECK first={:?} ({} jobs, total={}) second={:?} ({} jobs, total={})",
+            elapsed_first,
+            first.jobs.len(),
+            first.total_estimated,
+            elapsed_second,
+            second.jobs.len(),
+            second.total_estimated,
+        );
+        assert!(!first.jobs.is_empty());
+        assert!(!second.jobs.is_empty());
     }
 }

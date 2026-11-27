@@ -2,7 +2,7 @@
 ; Ships a clean application binary with zero pre-populated database files.
 
 #ifndef AppVersion
-  #define AppVersion "0.0.2"
+  #define AppVersion "0.0.3"
 #endif
 
 #define AppName "VanguardCV"

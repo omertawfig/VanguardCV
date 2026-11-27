@@ -20,6 +20,8 @@ pub const DEFAULT_LISTINGS_TTL: Duration = Duration::from_secs(600);
 /// Minimum interval between consecutive live network searches to protect
 /// upstream APIs from accidental rapid-click bursts.
 pub const MIN_FETCH_COOLDOWN: Duration = Duration::from_millis(1200);
+/// Upper bound on in-memory cached job search pages per session.
+const MAX_CACHED_LISTING_PAGES: usize = 48;
 
 #[derive(Debug, Clone)]
 struct CachedListings {
@@ -131,6 +133,18 @@ impl JobDiscoveryCache {
     }
 
     pub fn put_listings(&mut self, signature: impl Into<String>, result: JobSearchResult) {
+        let ttl = self.listings_ttl;
+        self.listings
+            .retain(|_, entry| entry.fetched_at.elapsed() <= ttl);
+        if self.listings.len() >= MAX_CACHED_LISTING_PAGES
+            && let Some(oldest_key) = self
+                .listings
+                .iter()
+                .min_by_key(|(_, entry)| entry.fetched_at)
+                .map(|(k, _)| k.clone())
+        {
+            self.listings.remove(&oldest_key);
+        }
         self.listings.insert(
             signature.into(),
             CachedListings {
@@ -153,6 +167,12 @@ impl JobDiscoveryCache {
 
     pub fn record_live_fetch(&mut self) {
         self.last_live_fetch_at = Some(Instant::now());
+    }
+
+    /// Clears the rapid-refresh cooldown (e.g. after a failed network search so
+    /// clicking Retry immediately succeeds without waiting).
+    pub fn clear_cooldown(&mut self) {
+        self.last_live_fetch_at = None;
     }
 
     /// Clears only cached job listings (used by the manual Refresh button).

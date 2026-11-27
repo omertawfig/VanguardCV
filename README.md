@@ -28,10 +28,10 @@
 
 Download the latest signed-checksum Windows installer from [**GitHub Releases**](https://github.com/omertawfig/VanguardCV/releases/latest):
 
-1. Run `VanguardCV-Setup-0.0.2-x64.exe` (per-user installer; installs to `%LOCALAPPDATA%\Programs\VanguardCV`).
+1. Run `VanguardCV-Setup-0.0.3-x64.exe` (per-user installer; installs to `%LOCALAPPDATA%\Programs\VanguardCV`).
 2. Verify checksum (optional):
    ```powershell
-   Get-FileHash .\VanguardCV-Setup-0.0.2-x64.exe -Algorithm SHA256
+   Get-FileHash .\VanguardCV-Setup-0.0.3-x64.exe -Algorithm SHA256
    ```
 3. Future updates can be checked, downloaded, and applied automatically from **Settings → Software updates** (toggle **Automatic updates** on or off at any time).
 

@@ -4,8 +4,8 @@ use gpui::*;
 
 use crate::contracts::CvDocument;
 use crate::ui::components::ui::{
-    ButtonVariant, IconName, el_id, render_brand_logo_badge, render_button, render_empty_state, render_icon,
-    render_icon_button,
+    ButtonVariant, IconName, el_id, render_brand_logo_badge, render_button,
+    render_decorated_input_box, render_empty_state, render_icon, render_icon_button,
 };
 use crate::ui::theme::Theme;
 use crate::ui::workspace::{LibraryFilter, LibrarySort, WorkspaceView, WorkspaceViewPage};
@@ -25,6 +25,20 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
         .collect();
 
     let query = workspace.library_query.trim().to_lowercase();
+    let contains_ci = |haystack: &str, needle_lower: &str| -> bool {
+        if needle_lower.is_empty() {
+            return true;
+        }
+        if haystack.is_ascii() && needle_lower.is_ascii() {
+            let nb = needle_lower.as_bytes();
+            haystack
+                .as_bytes()
+                .windows(nb.len())
+                .any(|w| w.eq_ignore_ascii_case(nb))
+        } else {
+            haystack.to_lowercase().contains(needle_lower)
+        }
+    };
     let matches = |doc: &CvDocument| -> bool {
         if query.is_empty() {
             return true;
@@ -39,9 +53,9 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
             .as_ref()
             .map(|j| j.target_role.as_str())
             .unwrap_or("");
-        doc.title.to_lowercase().contains(&query)
-            || job_company.to_lowercase().contains(&query)
-            || job_role.to_lowercase().contains(&query)
+        contains_ci(&doc.title, &query)
+            || contains_ci(job_company, &query)
+            || contains_ci(job_role, &query)
     };
 
     let sort_docs = |items: &mut Vec<&CvDocument>| match workspace.library_sort {
@@ -114,19 +128,12 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                         .gap(px(4.0))
                         .child(
                             div()
-                                .text_size(px(11.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme.muted)
-                                .child("YOUR WORKSPACE"),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(26.0))
+                                .text_size(px(24.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child("CV library"),
                         )
-                        .child(div().text_size(px(13.5)).text_color(theme.secondary).child(
+                        .child(div().text_size(px(14.0)).text_color(theme.secondary).child(
                             "A complete career record. A considered CV for every opportunity.",
                         )),
                 )
@@ -229,39 +236,28 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                         .flex_wrap()
                         .gap(px(10.0))
                         // Search bar
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.0))
-                                .h(px(34.0))
-                                .px(px(10.0))
-                                .rounded(px(5.0))
-                                .bg(theme.input)
-                                .border_1()
-                                .border_color(theme.border)
-                                .overflow_hidden()
-                                .child(render_icon(IconName::Search, 14.0, theme.muted))
-                                .child(
-                                    div()
-                                        .w(if is_narrow { px(130.0) } else { px(180.0) })
-                                        .min_w_0()
-                                        .child(workspace.search_input.clone()),
+                        .child(render_decorated_input_box(
+                            workspace.search_input.clone(),
+                            34.0,
+                            Some(IconName::Search),
+                            (!workspace.library_query.is_empty()).then(|| {
+                                render_icon_button(
+                                    "clear-search-btn",
+                                    IconName::Close,
+                                    "Clear search",
+                                    false,
+                                    theme,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.clear_search(cx);
+                                        cx.notify();
+                                    }),
                                 )
-                                .when(!workspace.library_query.is_empty(), |el| {
-                                    el.child(render_icon_button(
-                                        "clear-search-btn",
-                                        IconName::Close,
-                                        "Clear search",
-                                        false,
-                                        theme,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.clear_search(cx);
-                                            cx.notify();
-                                        }),
-                                    ))
-                                }),
-                        )
+                                .into_any_element()
+                            }),
+                            Some(if is_narrow { 130.0 } else { 180.0 }),
+                            theme,
+                            cx,
+                        ))
                         // Sort toggle button
                         .child(
                             div()
@@ -272,7 +268,7 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                                 .gap(px(6.0))
                                 .h(px(34.0))
                                 .px(px(12.0))
-                                .rounded(px(5.0))
+                                .rounded(px(6.0))
                                 .bg(theme.input)
                                 .border_1()
                                 .border_color(theme.border)
@@ -408,7 +404,7 @@ pub fn render_library_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                                         .child(render_brand_logo_badge(76.0, 68.0, 18.0, theme))
                                         .child(
                                             div()
-                                                .text_size(px(17.0))
+                                                .text_size(px(16.0))
                                                 .font_weight(FontWeight::BOLD)
                                                 .text_color(theme.text)
                                                 .text_center()
@@ -486,7 +482,7 @@ fn render_filter_pill(
         .child(label)
         .child(
             div()
-                .text_size(px(10.5))
+                .text_size(px(11.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.muted)
                 .child(count.to_string()),
@@ -618,7 +614,7 @@ fn render_master_card(
                                                 .rounded(px(4.0))
                                                 .bg(theme.add_bg)
                                                 .text_color(theme.add_text)
-                                                .text_size(px(10.0))
+                                                .text_size(px(11.0))
                                                 .font_weight(FontWeight::BOLD)
                                                 .child("Default"),
                                         )
@@ -626,7 +622,7 @@ fn render_master_card(
                             )
                             .child(
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .text_color(theme.muted)
                                     .whitespace_nowrap()
                                     .overflow_hidden()
@@ -901,7 +897,7 @@ fn render_variation_row(
                                     .rounded(px(4.0))
                                     .bg(theme.add_bg)
                                     .text_color(theme.add_text)
-                                    .text_size(px(10.0))
+                                    .text_size(px(11.0))
                                     .font_weight(FontWeight::BOLD)
                                     .child("Default"),
                             )
@@ -915,7 +911,7 @@ fn render_variation_row(
                                     .rounded(px(4.0))
                                     .bg(theme.accent_soft)
                                     .text_color(theme.accent_text)
-                                    .text_size(px(10.0))
+                                    .text_size(px(11.0))
                                     .font_weight(FontWeight::BOLD)
                                     .child(format!("{pending_proposals} pending")),
                             )
@@ -971,7 +967,7 @@ fn render_variation_row(
                                 } else {
                                     theme.accent_text
                                 })
-                                .text_size(px(10.5))
+                                .text_size(px(11.0))
                                 .font_weight(FontWeight::BOLD)
                                 .child(format!("{score}% ATS")),
                         )

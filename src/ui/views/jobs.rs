@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -7,7 +9,8 @@ use crate::jobs::{
     build_external_search_links,
 };
 use crate::ui::components::ui::{
-    ButtonVariant, IconName, el_id, render_button, render_icon, render_icon_button,
+    ButtonVariant, IconName, el_id, render_button, render_decorated_input_box, render_icon,
+    render_icon_button, tooltip_view,
 };
 use crate::ui::theme::Theme;
 use crate::ui::workspace::{WorkspaceView, WorkspaceViewPage};
@@ -28,6 +31,7 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
     let has_docs = !workspace.documents.is_empty();
     let has_active_query = !workspace.job_filters.manual_query.trim().is_empty()
         || workspace.job_profiles.iter().any(|p| p.enabled);
+    let needs_search_update = workspace.job_search_has_unapplied_changes();
 
     let external_links =
         build_external_search_links(&workspace.job_profiles, &workspace.job_filters);
@@ -66,14 +70,14 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                                 .gap(px(4.0))
                                 .child(
                                     div()
-                                        .text_size(px(26.0))
+                                        .text_size(px(24.0))
                                         .font_weight(FontWeight::BOLD)
                                         .text_color(theme.text)
                                         .child("Job discovery"),
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(13.5))
+                                        .text_size(px(14.0))
                                         .line_height(px(19.5))
                                         .text_color(theme.secondary)
                                         .child(
@@ -81,29 +85,7 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                                         ),
                                 ),
                         )
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.0))
-                                .child(render_button(
-                                    "jobs-refresh-btn",
-                                    if workspace.job_listings_loading {
-                                        "Refreshing…"
-                                    } else {
-                                        "Refresh jobs"
-                                    },
-                                    Some(IconName::Search),
-                                    ButtonVariant::Secondary,
-                                    workspace.job_listings_loading || !has_active_query,
-                                    theme,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.search_jobs(true, cx);
-                                        cx.notify();
-                                    }),
-                                )),
-                        ),
+
                 )
                 // Error / API Limit Reached Banner
                 .when_some(workspace.job_error.clone(), |el, err| {
@@ -254,7 +236,7 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                                     .gap(px(4.0))
                                     .child(
                                         div()
-                                            .text_size(px(14.5))
+                                            .text_size(px(14.0))
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(theme.text)
                                             .child(
@@ -263,7 +245,7 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                                     )
                                     .child(
                                         div()
-                                            .text_size(px(12.5))
+                                            .text_size(px(13.0))
                                             .text_color(theme.secondary)
                                             .child(
                                                 "Add a Master CV in the library, or enter a custom search query below.",
@@ -295,6 +277,89 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                     theme,
                     cx,
                 ))
+                // Prompt banner when search profiles, keywords, or query changed
+                .when(needs_search_update, |el| {
+                    let pulse_dot_color = theme.focus_ring;
+                    el.child(
+                        div()
+                            .w(px(card_w))
+                            .flex_shrink_0()
+                            .px(px(14.0))
+                            .py(px(10.0))
+                            .rounded(px(6.0))
+                            .bg(theme.accent_soft)
+                            .border_1()
+                            .border_color(theme.accent)
+                            .flex()
+                            .items_center()
+                            .gap(px(9.0))
+                            .child(
+                                div()
+                                    .size(px(8.0))
+                                    .flex_shrink_0()
+                                    .rounded_full()
+                                    .bg(pulse_dot_color)
+                                    .with_animation(
+                                        "jobs-dirty-dot-pulse",
+                                        Animation::new(Duration::from_millis(1200))
+                                            .repeat()
+                                            .with_easing(bounce(ease_in_out)),
+                                        |dot, delta| dot.opacity(0.35 + delta * 0.65),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .items_center()
+                                    .flex_wrap()
+                                    .gap_x(px(5.0))
+                                    .gap_y(px(3.0))
+                                    .text_size(px(12.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme.text)
+                                    .child("Search profiles or criteria changed — click")
+                                    .child(
+                                        div()
+                                            .flex_shrink_0()
+                                            .px(px(6.0))
+                                            .py(px(1.5))
+                                            .rounded(px(4.0))
+                                            .bg(theme.accent)
+                                            .text_size(px(12.0))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(theme.on_accent)
+                                            .child("Update search"),
+                                    )
+                                    .child("above to refresh the listings below."),
+                            ),
+                    )
+                })
+                // Subtle hint when user unchecked all profiles while previous listings remain visible
+                .when(
+                    !has_active_query
+                        && !workspace.job_listings.is_empty()
+                        && !workspace.job_listings_loading,
+                    |el| {
+                        el.child(
+                            div()
+                                .w(px(card_w))
+                                .flex_shrink_0()
+                                .px(px(14.0))
+                                .py(px(9.0))
+                                .rounded(px(6.0))
+                                .bg(theme.input)
+                                .border_1()
+                                .border_color(theme.border_soft)
+                                .text_size(px(12.0))
+                                .text_color(theme.secondary)
+                                .child(
+                                    "No search profile selected — check a role above or enter a custom query, then click Update search.",
+                                ),
+                        )
+                    },
+                )
                 // Warnings strip (if provider emitted non-fatal warnings)
                 .when(!workspace.job_warnings.is_empty(), |el| {
                     el.child(
@@ -303,7 +368,7 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                             .flex_shrink_0()
                             .px(px(12.0))
                             .py(px(8.0))
-                            .rounded(px(5.0))
+                            .rounded(px(6.0))
                             .bg(theme.input)
                             .border_1()
                             .border_color(theme.border_soft)
@@ -340,12 +405,12 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                                     .gap(px(5.0))
                                     .px(px(10.0))
                                     .py(px(4.0))
-                                    .rounded(px(14.0))
+                                    .rounded_full()
                                     .bg(theme.surface)
                                     .border_1()
                                     .border_color(theme.border)
                                     .hover(|s| s.bg(theme.hover).border_color(theme.secondary))
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme.text)
                                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -390,6 +455,7 @@ pub fn render_jobs_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceVie
                 .child(render_results_section(
                     workspace,
                     target_master_title.as_deref(),
+                    has_active_query,
                     card_w,
                     inner_w,
                     theme,
@@ -473,7 +539,7 @@ fn render_controls_card(
                                 .gap(px(8.0))
                                 .child(
                                     div()
-                                        .text_size(px(13.5))
+                                        .text_size(px(14.0))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(theme.text)
                                         .child("CV source"),
@@ -487,7 +553,7 @@ fn render_controls_card(
                                         .py(px(2.0))
                                         .rounded(px(4.0))
                                         .bg(theme.accent_soft)
-                                        .text_size(px(10.5))
+                                        .text_size(px(11.0))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(theme.accent_text)
                                         .child(render_icon(IconName::Lock, 10.5, theme.accent))
@@ -525,7 +591,7 @@ fn render_controls_card(
                                     .gap(px(6.0))
                                     .px(px(10.0))
                                     .py(px(5.0))
-                                    .rounded(px(5.0))
+                                    .rounded(px(6.0))
                                     .border_1()
                                     .border_color(if is_selected {
                                         theme.accent
@@ -575,11 +641,11 @@ fn render_controls_card(
                                             div()
                                                 .px(px(5.0))
                                                 .py(px(1.0))
-                                                .rounded(px(3.0))
+                                                .rounded(px(4.0))
                                                 .bg(theme.surface)
                                                 .border_1()
                                                 .border_color(theme.border_soft)
-                                                .text_size(px(10.0))
+                                                .text_size(px(11.0))
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(theme.accent_text)
                                                 .child("Default"),
@@ -598,7 +664,7 @@ fn render_controls_card(
                                         .gap(px(6.0))
                                         .px(px(10.0))
                                         .py(px(5.0))
-                                        .rounded(px(5.0))
+                                        .rounded(px(6.0))
                                         .border_1()
                                         .border_color(if is_all {
                                             theme.accent
@@ -762,7 +828,7 @@ fn render_controls_card(
                             .gap(px(6.0))
                             .child(
                                 div()
-                                    .text_size(px(12.5))
+                                    .text_size(px(13.0))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme.text)
                                     .child(
@@ -771,7 +837,7 @@ fn render_controls_card(
                             )
                             .child(
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .text_color(theme.muted)
                                     .child(format!(
                                         "{} of {} active",
@@ -814,26 +880,17 @@ fn render_controls_card(
                         .when(!stack_input_row, |d| d.flex_row().items_center())
                         .gap(px(8.0))
                         .child(
-                            div()
-                                .when(!stack_input_row, |d| d.flex_1().min_w_0())
-                                .when(stack_input_row, |d| d.w(px(inner_w)))
-                                .h(px(34.0))
-                                .px(px(10.0))
-                                .flex()
-                                .items_center()
-                                .gap(px(8.0))
-                                .rounded(px(5.0))
-                                .bg(theme.input)
-                                .border_1()
-                                .border_color(theme.border)
-                                .overflow_hidden()
-                                .child(render_icon(IconName::Search, 14.0, theme.muted))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .child(workspace.job_query_input.clone()),
-                                ),
+                            render_decorated_input_box(
+                                workspace.job_query_input.clone(),
+                                34.0,
+                                Some(IconName::Search),
+                                None,
+                                None,
+                                theme,
+                                cx,
+                            )
+                            .when(!stack_input_row, |d| d.flex_1())
+                            .when(stack_input_row, |d| d.w(px(inner_w))),
                         )
                         .child(
                             div()
@@ -855,24 +912,72 @@ fn render_controls_card(
                                         }),
                                     ))
                                 })
-                                .child(render_button(
-                                    "jobs-search-btn",
-                                    if workspace.job_listings_loading {
-                                        "Searching…"
-                                    } else {
-                                        "Search jobs"
-                                    },
-                                    Some(IconName::Search),
-                                    ButtonVariant::Secondary,
-                                    workspace.job_listings_loading
+                                .child({
+                                    let needs_update = workspace.job_search_has_unapplied_changes();
+                                    let disabled = workspace.job_listings_loading
                                         || (!has_manual
-                                            && !workspace.job_profiles.iter().any(|p| p.enabled)),
-                                    theme,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.search_jobs(false, cx);
-                                        cx.notify();
-                                    }),
-                                )),
+                                            && !workspace.job_profiles.iter().any(|p| p.enabled));
+                                    let btn = render_button(
+                                        "jobs-search-btn",
+                                        if workspace.job_listings_loading {
+                                            "Searching…"
+                                        } else if needs_update {
+                                            "Update search"
+                                        } else {
+                                            "Search jobs"
+                                        },
+                                        Some(IconName::Search),
+                                        if needs_update {
+                                            ButtonVariant::Primary
+                                        } else {
+                                            ButtonVariant::Secondary
+                                        },
+                                        disabled,
+                                        theme,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.search_jobs(false, cx);
+                                            cx.notify();
+                                        }),
+                                    )
+                                    .tooltip(|_window, cx| {
+                                        tooltip_view(
+                                            "Search with selected profiles and filters (uses session cache when unchanged)",
+                                            cx,
+                                        )
+                                    });
+
+                                    if needs_update && !disabled {
+                                        let glow = theme.focus_ring;
+                                        div()
+                                            .flex_shrink_0()
+                                            .rounded(px(6.0))
+                                            .child(btn)
+                                            .with_animation(
+                                                "jobs-search-btn-pulse",
+                                                Animation::new(Duration::from_millis(1350))
+                                                    .repeat()
+                                                    .with_easing(bounce(ease_in_out)),
+                                                move |wrapper, delta| {
+                                                    let alpha = 0.14 + delta * 0.44;
+                                                    let ring_color = Rgba {
+                                                        r: glow.r,
+                                                        g: glow.g,
+                                                        b: glow.b,
+                                                        a: alpha,
+                                                    };
+                                                    wrapper.shadow(vec![BoxShadow {
+                                                        color: ring_color.into(),
+                                                        offset: point(px(0.0), px(0.0)),
+                                                        blur_radius: px(2.0 + delta * 6.0),
+                                                        spread_radius: px(1.0 + delta * 2.5),
+                                                    }])
+                                                },
+                                            )
+                                            .into_any_element()
+                                    } else {
+                                        btn.into_any_element()
+                                    }
+                                }),
                         ),
                 )
                 // Filters row: Remote toggle + Freshness window + Per-page limit
@@ -893,7 +998,7 @@ fn render_controls_card(
                                 .gap(px(6.0))
                                 .px(px(10.0))
                                 .py(px(4.0))
-                                .rounded(px(14.0))
+                                .rounded_full()
                                 .border_1()
                                 .border_color(if workspace.job_filters.remote_only {
                                     theme.accent
@@ -906,7 +1011,7 @@ fn render_controls_card(
                                     theme.input
                                 })
                                 .hover(|s| s.border_color(theme.accent))
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(if workspace.job_filters.remote_only {
                                     theme.accent_text
@@ -926,7 +1031,7 @@ fn render_controls_card(
                         .child(
                             div()
                                 .flex_shrink_0()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .text_color(theme.muted)
                                 .child("Country:"),
                         )
@@ -953,7 +1058,7 @@ fn render_controls_card(
                                         .gap(px(6.0))
                                         .px(px(10.0))
                                         .py(px(4.0))
-                                        .rounded(px(14.0))
+                                        .rounded_full()
                                         .border_1()
                                         .border_color(if active || open {
                                             theme.accent
@@ -966,7 +1071,7 @@ fn render_controls_card(
                                             theme.input
                                         })
                                         .hover(|s| s.border_color(theme.accent))
-                                        .text_size(px(11.5))
+                                        .text_size(px(12.0))
                                         .font_weight(if active {
                                             FontWeight::SEMIBOLD
                                         } else {
@@ -995,7 +1100,7 @@ fn render_controls_card(
                                             .flex_shrink_0()
                                             .cursor_pointer()
                                             .size(px(22.0))
-                                            .rounded(px(11.0))
+                                            .rounded_full()
                                             .border_1()
                                             .border_color(theme.border_soft)
                                             .bg(theme.input)
@@ -1015,7 +1120,7 @@ fn render_controls_card(
                         .child(
                             div()
                                 .flex_shrink_0()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .text_color(theme.muted)
                                 .child("Posted:"),
                         )
@@ -1031,7 +1136,7 @@ fn render_controls_card(
                                 .cursor_pointer()
                                 .px(px(9.0))
                                 .py(px(4.0))
-                                .rounded(px(14.0))
+                                .rounded_full()
                                 .border_1()
                                 .border_color(if active {
                                     theme.accent
@@ -1044,7 +1149,7 @@ fn render_controls_card(
                                     theme.input
                                 })
                                 .hover(|s| s.border_color(theme.accent))
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .font_weight(if active {
                                     FontWeight::SEMIBOLD
                                 } else {
@@ -1065,7 +1170,7 @@ fn render_controls_card(
                         .child(
                             div()
                                 .flex_shrink_0()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .text_color(theme.muted)
                                 .child("Per page:"),
                         )
@@ -1077,7 +1182,7 @@ fn render_controls_card(
                                 .cursor_pointer()
                                 .px(px(8.0))
                                 .py(px(4.0))
-                                .rounded(px(14.0))
+                                .rounded_full()
                                 .border_1()
                                 .border_color(if active {
                                     theme.accent
@@ -1090,7 +1195,7 @@ fn render_controls_card(
                                     theme.input
                                 })
                                 .hover(|s| s.border_color(theme.accent))
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .font_weight(if active {
                                     FontWeight::SEMIBOLD
                                 } else {
@@ -1125,96 +1230,12 @@ fn render_country_dropdown_panel(
     let list_h = 236.0_f32;
     let body_w = (panel_w - 18.0).max(200.0);
     let item_w = (body_w - 14.0).max(180.0);
-    let selected_code = workspace.job_filters.country.as_deref();
-
-    let scroll_offset = workspace.job_country_scroll.offset();
-    let scroll_max = workspace.job_country_scroll.max_offset();
-    let scroll_bounds = workspace.job_country_scroll.bounds();
+    let base_scroll = workspace.job_country_base_scroll();
+    let scroll_offset = base_scroll.offset();
+    let scroll_max = base_scroll.max_offset();
+    let scroll_bounds = base_scroll.bounds();
     let max_y = f32::from(scroll_max.height);
-
-    let render_row = |id_suffix: String,
-                      label: String,
-                      code_badge: Option<String>,
-                      code_value: Option<String>,
-                      is_selected: bool,
-                      cx: &mut Context<WorkspaceView>| {
-        div()
-            .id(el_id(format!("jobs-country-opt-{id_suffix}")))
-            .w(px(item_w))
-            .flex_shrink_0()
-            .cursor_pointer()
-            .px(px(10.0))
-            .py(px(6.0))
-            .rounded(px(5.0))
-            .bg(if is_selected {
-                theme.accent_soft
-            } else {
-                theme.transparent
-            })
-            .border_1()
-            .border_color(if is_selected {
-                theme.accent
-            } else {
-                theme.transparent
-            })
-            .hover(|s| {
-                s.bg(if is_selected {
-                    theme.accent_soft
-                } else {
-                    theme.hover
-                })
-            })
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap(px(8.0))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.set_job_country(code_value.clone(), cx);
-                cx.notify();
-            }))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .text_size(px(12.0))
-                    .font_weight(if is_selected {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::NORMAL
-                    })
-                    .text_color(if is_selected {
-                        theme.accent_text
-                    } else {
-                        theme.text
-                    })
-                    .child(label),
-            )
-            .child(
-                div()
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .when_some(code_badge, |el, badge| {
-                        el.child(
-                            div()
-                                .px(px(5.0))
-                                .py(px(1.0))
-                                .rounded(px(3.0))
-                                .bg(theme.input)
-                                .border_1()
-                                .border_color(theme.border_soft)
-                                .text_size(px(10.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(theme.muted)
-                                .child(badge),
-                        )
-                    })
-                    .when(is_selected, |el| {
-                        el.child(render_icon(IconName::Check, 12.0, theme.accent))
-                    }),
-            )
-    };
+    let total_rows = JOB_COUNTRIES.len() + 1;
 
     div()
         .w(px(panel_w))
@@ -1262,50 +1283,142 @@ fn render_country_dropdown_panel(
                 .w(px(body_w))
                 .h(px(list_h))
                 .overflow_hidden()
+                .on_scroll_wheel(cx.listener(
+                    |this, event: &ScrollWheelEvent, _window, cx| {
+                        let delta = event.delta.pixel_delta(px(28.0));
+                        if delta.y != px(0.0) && this.scroll_job_country_by(delta.y, cx) {
+                            cx.stop_propagation();
+                        }
+                    },
+                ))
                 .child(
-                    div()
-                        .id("jobs-country-scroll-list")
-                        .size_full()
-                        .overflow_y_scroll()
-                        .track_scroll(&workspace.job_country_scroll)
-                        .child(
-                            div()
-                                .w(px(item_w))
-                                .flex()
-                                .flex_col()
-                                .gap(px(2.0))
-                                .pb(px(4.0))
-                                .on_scroll_wheel(cx.listener(
-                                    |this, event: &ScrollWheelEvent, _window, cx| {
-                                        let delta = event.delta.pixel_delta(px(28.0));
-                                        if delta.y != px(0.0)
-                                            && this.scroll_job_country_by(delta.y, cx)
-                                        {
-                                            cx.stop_propagation();
-                                        }
-                                    },
-                                ))
-                                .child(render_row(
-                                    "all".to_string(),
-                                    "All locations (Worldwide)".to_string(),
-                                    Some("ALL".to_string()),
-                                    None,
-                                    selected_code.is_none(),
-                                    cx,
-                                ))
-                                .children(JOB_COUNTRIES.iter().map(|country| {
-                                    let is_sel = selected_code
-                                        .is_some_and(|c| c.eq_ignore_ascii_case(country.code));
-                                    render_row(
-                                        country.code.to_string(),
-                                        country.name.to_string(),
-                                        Some(country.code.to_ascii_uppercase()),
-                                        Some(country.code.to_string()),
-                                        is_sel,
-                                        cx,
-                                    )
-                                })),
-                        ),
+                    uniform_list(
+                        "jobs-country-scroll-list",
+                        total_rows,
+                        cx.processor(move |this, range: std::ops::Range<usize>, _window, cx| {
+                            let t = &this.theme;
+                            let sel_code = this.job_filters.country.as_deref();
+                            let mut rows = Vec::with_capacity(range.len());
+                            for ix in range {
+                                let (id_suffix, label, code_badge, code_value, is_selected) =
+                                    if ix == 0 {
+                                        (
+                                            "all".to_string(),
+                                            "All locations (Worldwide)".to_string(),
+                                            Some("ALL".to_string()),
+                                            None,
+                                            sel_code.is_none(),
+                                        )
+                                    } else {
+                                        let country = &JOB_COUNTRIES[ix - 1];
+                                        let is_sel = sel_code.is_some_and(|c| {
+                                            c.eq_ignore_ascii_case(country.code)
+                                        });
+                                        (
+                                            country.code.to_string(),
+                                            country.name.to_string(),
+                                            Some(country.code.to_ascii_uppercase()),
+                                            Some(country.code.to_string()),
+                                            is_sel,
+                                        )
+                                    };
+                                let hover_bg = if is_selected {
+                                    t.accent_soft
+                                } else {
+                                    t.hover
+                                };
+                                rows.push(
+                                    div()
+                                        .w(px(item_w))
+                                        .h(px(32.0))
+                                        .pb(px(2.0))
+                                        .child(
+                                            div()
+                                                .id(el_id(format!(
+                                                    "jobs-country-opt-{id_suffix}"
+                                                )))
+                                                .w_full()
+                                                .h_full()
+                                                .cursor_pointer()
+                                                .px(px(10.0))
+                                                .rounded(px(6.0))
+                                                .bg(if is_selected {
+                                                    t.accent_soft
+                                                } else {
+                                                    t.transparent
+                                                })
+                                                .border_1()
+                                                .border_color(if is_selected {
+                                                    t.accent
+                                                } else {
+                                                    t.transparent
+                                                })
+                                                .hover(move |s| s.bg(hover_bg))
+                                                .flex()
+                                                .items_center()
+                                                .justify_between()
+                                                .gap(px(8.0))
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.set_job_country(code_value.clone(), cx);
+                                                    cx.notify();
+                                                }))
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .min_w_0()
+                                                        .overflow_hidden()
+                                                        .whitespace_nowrap()
+                                                        .text_ellipsis()
+                                                        .text_size(px(12.0))
+                                                        .font_weight(if is_selected {
+                                                            FontWeight::SEMIBOLD
+                                                        } else {
+                                                            FontWeight::NORMAL
+                                                        })
+                                                        .text_color(if is_selected {
+                                                            t.accent_text
+                                                        } else {
+                                                            t.text
+                                                        })
+                                                        .child(label),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .flex_shrink_0()
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap(px(6.0))
+                                                        .when_some(code_badge, |el, badge| {
+                                                            el.child(
+                                                                div()
+                                                                    .px(px(5.0))
+                                                                    .py(px(1.0))
+                                                                    .rounded(px(4.0))
+                                                                    .bg(t.input)
+                                                                    .border_1()
+                                                                    .border_color(t.border_soft)
+                                                                    .text_size(px(11.0))
+                                                                    .font_weight(FontWeight::MEDIUM)
+                                                                    .text_color(t.muted)
+                                                                    .child(badge),
+                                                            )
+                                                        })
+                                                        .when(is_selected, |el| {
+                                                            el.child(render_icon(
+                                                                IconName::Check,
+                                                                12.0,
+                                                                t.accent,
+                                                            ))
+                                                        }),
+                                                ),
+                                        ),
+                                );
+                            }
+                            rows
+                        }),
+                    )
+                    .size_full()
+                    .track_scroll(workspace.job_country_scroll.clone()),
                 )
                 .when(max_y > 1.0, |el| {
                     let view_h = f32::from(scroll_bounds.size.height).max(list_h);
@@ -1329,14 +1442,14 @@ fn render_country_dropdown_panel(
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, event: &MouseDownEvent, _window, cx| {
-                                    let bounds = this.job_country_scroll.bounds();
+                                    let handle = this.job_country_base_scroll();
+                                    let bounds = handle.bounds();
                                     let rel = (f32::from(event.position.y - bounds.top()) - 2.0)
                                         / (f32::from(bounds.size.height) - 4.0).max(1.0);
-                                    let max_h =
-                                        f32::from(this.job_country_scroll.max_offset().height);
-                                    let cur = this.job_country_scroll.offset();
+                                    let max_h = f32::from(handle.max_offset().height);
+                                    let cur = handle.offset();
                                     let next_y = px(-(rel.clamp(0.0, 1.0) * max_h));
-                                    this.job_country_scroll.set_offset(point(cur.x, next_y));
+                                    handle.set_offset(point(cur.x, next_y));
                                     cx.stop_propagation();
                                     cx.notify();
                                 }),
@@ -1388,6 +1501,8 @@ fn render_profile_card(
             div()
                 .id(el_id(format!("job-profile-toggle-{}", profile.id)))
                 .cursor_pointer()
+                .rounded(px(4.0))
+                .hover(|s| s.opacity(0.88))
                 .flex()
                 .items_start()
                 .justify_between()
@@ -1410,13 +1525,13 @@ fn render_profile_card(
                                 .size(px(16.0))
                                 .rounded(px(4.0))
                                 .border_1()
-                                .border_color(if enabled { theme.accent } else { theme.border })
+                                .border_color(if enabled { theme.accent } else { theme.border_control })
                                 .bg(if enabled { theme.accent } else { theme.surface })
                                 .flex()
                                 .items_center()
                                 .justify_center()
                                 .when(enabled, |box_el| {
-                                    box_el.child(render_icon(IconName::Check, 10.5, rgb(0xffffff)))
+                                    box_el.child(render_icon(IconName::Check, 10.5, theme.on_accent))
                                 }),
                         )
                         .child(
@@ -1435,7 +1550,7 @@ fn render_profile_card(
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(10.5))
+                                        .text_size(px(11.0))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(theme.muted)
                                         .child(profile.label.clone()),
@@ -1464,7 +1579,7 @@ fn render_profile_card(
                             .cursor_pointer()
                             .px(px(8.0))
                             .py(px(2.0))
-                            .rounded(px(12.0))
+                            .rounded_full()
                             .border_1()
                             .border_color(if kw_enabled && enabled {
                                 theme.border
@@ -1500,6 +1615,7 @@ fn render_profile_card(
 fn render_results_section(
     workspace: &WorkspaceView,
     target_master_title: Option<&str>,
+    has_active_query: bool,
     card_w: f32,
     inner_w: f32,
     theme: &Theme,
@@ -1547,7 +1663,7 @@ fn render_results_section(
                         .gap(px(8.0))
                         .child(
                             div()
-                                .text_size(px(15.0))
+                                .text_size(px(16.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
                                 .child("Live opportunities"),
@@ -1558,9 +1674,9 @@ fn render_results_section(
                                     .flex_shrink_0()
                                     .px(px(8.0))
                                     .py(px(2.0))
-                                    .rounded(px(10.0))
+                                    .rounded_full()
                                     .bg(theme.input)
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme.secondary)
                                     .child(if total > shown as u64 {
@@ -1581,7 +1697,7 @@ fn render_results_section(
                                     .py(px(2.0))
                                     .rounded(px(4.0))
                                     .bg(theme.input)
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.0))
                                     .text_color(theme.muted)
                                     .child("Cached · 10m"),
                             )
@@ -1593,7 +1709,7 @@ fn render_results_section(
                         .items_center()
                         .flex_wrap()
                         .gap(px(8.0))
-                        .text_size(px(11.5))
+                        .text_size(px(12.0))
                         .text_color(theme.muted)
                         .when_some(target_master_title, |el, master| {
                             el.child(format!("Tailor branches from: {master}"))
@@ -1607,9 +1723,33 @@ fn render_results_section(
                                 .bg(theme.input)
                                 .border_1()
                                 .border_color(theme.border_soft)
-                                .text_size(px(10.5))
+                                .text_size(px(11.0))
                                 .text_color(theme.muted)
                                 .child("Powered by Freehire.me"),
+                        )
+                        .child(
+                            render_button(
+                                "jobs-refresh-btn",
+                                if workspace.job_listings_loading {
+                                    "Refreshing…"
+                                } else {
+                                    "Refresh jobs"
+                                },
+                                Some(IconName::Search),
+                                ButtonVariant::Secondary,
+                                workspace.job_listings_loading || !has_active_query,
+                                theme,
+                                cx.listener(|this, _, _, cx| {
+                                    this.search_jobs(true, cx);
+                                    cx.notify();
+                                }),
+                            )
+                            .tooltip(|_window, cx| {
+                                tooltip_view(
+                                    "Bypass cache and fetch fresh live jobs from Freehire.me",
+                                    cx,
+                                )
+                            }),
                         ),
                 ),
         )
@@ -1675,7 +1815,7 @@ fn render_results_section(
                     div()
                         .w(px((inner_w).min(540.0)))
                         .text_center()
-                        .text_size(px(12.5))
+                        .text_size(px(13.0))
                         .line_height(px(18.0))
                         .text_color(theme.secondary)
                         .child(if has_started {
@@ -1842,7 +1982,7 @@ fn render_job_card(
                             div()
                                 .w_full()
                                 .min_w_0()
-                                .text_size(px(15.0))
+                                .text_size(px(16.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
                                 .child(job.title.clone()),
@@ -1851,7 +1991,7 @@ fn render_job_card(
                             div()
                                 .w_full()
                                 .min_w_0()
-                                .text_size(px(12.5))
+                                .text_size(px(13.0))
                                 .text_color(theme.secondary)
                                 .child(format!("{} · {}", job.company, job.location)),
                         ),
@@ -1968,7 +2108,7 @@ fn render_job_card(
                             .rounded(px(4.0))
                             .border_1()
                             .border_color(theme.border_soft)
-                            .text_size(px(10.5))
+                            .text_size(px(11.0))
                             .text_color(theme.muted)
                             .child(format!("Profile: {profile_name}")),
                     )
@@ -1979,7 +2119,7 @@ fn render_job_card(
             card.child(
                 div()
                     .w(px(inner_w))
-                    .text_size(px(12.5))
+                    .text_size(px(13.0))
                     .line_height(px(18.5))
                     .text_color(theme.secondary)
                     .child(job.preview.clone()),
@@ -2025,7 +2165,7 @@ fn render_job_card(
                             .flex()
                             .items_center()
                             .gap(px(4.0))
-                            .text_size(px(11.5))
+                            .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.accent_text)
                             .hover(|s| s.text_color(theme.text))
@@ -2060,7 +2200,7 @@ fn render_job_card(
                         .overflow_hidden()
                         .mt(px(4.0))
                         .p(px(12.0))
-                        .rounded(px(5.0))
+                        .rounded(px(6.0))
                         .bg(theme.input)
                         .border_1()
                         .border_color(theme.border_soft)

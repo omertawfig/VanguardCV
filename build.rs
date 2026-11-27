@@ -4,7 +4,8 @@
 //!   - Embeds a side-by-side application manifest requesting
 //!     `Microsoft.Windows.Common-Controls` `6.0.0.0` (so `TaskDialogIndirect`,
 //!     imported by `gpui` / `rfd` from `comctl32.dll`, resolves at launch instead
-//!     of failing with `0xc0000139 (STATUS_ENTRYPOINT_NOT_FOUND)`) AND declaring
+//!     of failing with `0xc0000139 (STATUS_ENTRYPOINT_NOT_FOUND)`), declaring
+//!     Windows 10/11 compatibility and `asInvoker` trust info, AND declaring
 //!     `PerMonitorV2` DPI awareness so Windows renders crisp native resolution
 //!     text without DWM bitmap scaling blur.
 //!   - Compiles and embeds a Win32 `.res` resource containing the VanguardCV
@@ -113,7 +114,7 @@ fn configure_windows_resources() {
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR set by cargo"));
 
-    // 1. Embed Common Controls v6 + PerMonitorV2 DPI manifest.
+    // 1. Embed Common Controls v6 + Windows 10/11 compatibility + PerMonitorV2 DPI manifest.
     let manifest_xml = format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
@@ -135,6 +136,19 @@ fn configure_windows_resources() {
       />
     </dependentAssembly>
   </dependency>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and Windows 11 -->
+      <supportedOS Id="{{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}}"/>
+    </application>
+  </compatibility>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>

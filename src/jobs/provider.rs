@@ -13,17 +13,28 @@
 //!   results are additionally verified and sorted newest-first client-side.
 //! - Combines up to 5 active role titles into a single `title:"..." OR ...` query
 //!   so each page turn is 1 lightweight request with exact pagination and `meta.total`.
+//! - Hardened reliability:
+//!   - Progressive multi-attempt retry on transient network/connect/TLS/stream/5xx/408/429
+//!     failures (honoring `Retry-After` up to 4s) with fresh sockets (`Connection: close`)
+//!     on retries to bypass stale Cloudflare/NAT pooled connections.
+//!   - Never silently discards body-read errors into JSON parse failures.
+//!   - Automatic fallback to the lighter `/jobs/search` endpoint when `/agent/jobs/search`
+//!     is unsupported or repeatedly times out / returns 5xx.
+//!   - Automatic fallback to simpler broad query if strict `title:"..."` syntax returns 400/422.
 //! - All response structs use `#[serde(default)]` so upstream schema additions
 //!   or omitted optional fields never break deserialization.
 
 use std::collections::HashSet;
-use std::time::Duration;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::Deserialize;
+use tokio::sync::RwLock;
 use url::Url;
 
 use crate::jobs::models::{
@@ -34,6 +45,12 @@ use crate::jobs::models::{
 pub const FREEHIRE_API_BASE_URL: &str = "https://freehire.me/api/v1";
 pub const FREEHIRE_WEB_BASE_URL: &str = "https://freehire.me";
 const FREEHIRE_USER_AGENT: &str = concat!("vanguardcv/vanguard-cv/", env!("CARGO_PKG_VERSION"));
+const CONNECT_TIMEOUT_SECS: u64 = 5;
+const REQUEST_TIMEOUT_SECS: u64 = 18;
+const DOH_TIMEOUT_SECS: u64 = 4;
+const PRIMARY_MAX_ATTEMPTS: usize = 3;
+const FALLBACK_MAX_ATTEMPTS: usize = 2;
+const MAX_RETRY_AFTER_SECS: u64 = 4;
 
 /// Pluggable job discovery provider abstraction.
 #[async_trait]
@@ -51,7 +68,25 @@ pub trait JobProvider: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct FreehireProvider {
     http: Client,
+    /// Cached alternate-edge HTTPS client resolved via DNS-over-HTTPS when local
+    /// ISP DNS returns a blackholed Cloudflare edge IP (e.g. `188.114.96.x`).
+    fallback_http: Arc<RwLock<Option<Client>>>,
     base_url: String,
+    retry_base_delay: Duration,
+}
+
+#[derive(Debug, Deserialize)]
+struct DohResponse {
+    #[serde(rename = "Answer", default)]
+    answer: Vec<DohAnswer>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DohAnswer {
+    #[serde(rename = "type", default)]
+    record_type: u16,
+    #[serde(default)]
+    data: String,
 }
 
 impl Default for FreehireProvider {
@@ -64,24 +99,198 @@ enum EndpointOutcome {
     Ok(FreehireSearchResponse),
     /// Endpoint returned 404/405/501 — safe to try `/jobs/search` fallback.
     Unsupported(anyhow::Error),
-    /// Transient timeout, connection, or 5xx error — eligible for 1 polite retry.
-    Transient(anyhow::Error),
-    /// Non-retryable error (429 rate limit, 4xx, parse error).
+    /// TCP/TLS connect failure or fast connect timeout before reaching the server.
+    Unreachable(anyhow::Error),
+    /// Transient server/stream/408/429/5xx error after connecting — eligible for retry.
+    Transient {
+        error: anyhow::Error,
+        retry_after: Option<Duration>,
+    },
+    /// Query syntax rejected by server (400 / 422) — caller may retry with a simpler query.
+    BadQuery(anyhow::Error),
+    /// Non-retryable client or permanent schema error.
     Fatal(anyhow::Error),
+}
+
+enum SearchQueryOutcome {
+    Ok(FreehireSearchResponse, bool),
+    Unreachable(anyhow::Error),
+    Failed(anyhow::Error),
+}
+
+fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let raw = headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim();
+    let secs = raw.parse::<u64>().ok()?;
+    Some(Duration::from_secs(secs.min(MAX_RETRY_AFTER_SECS)))
 }
 
 impl FreehireProvider {
     pub fn new(base_url: impl Into<String>) -> Self {
-        let http = Client::builder()
+        Self::with_retry_base_delay(base_url, Duration::from_millis(450))
+    }
+
+    fn build_http_client(resolve_override: Option<(&str, &[SocketAddr])>) -> Client {
+        let mut builder = Client::builder()
             .user_agent(FREEHIRE_USER_AGENT)
-            .connect_timeout(Duration::from_secs(12))
-            .timeout(Duration::from_secs(30))
-            .pool_idle_timeout(Duration::from_secs(60))
-            .build()
-            .unwrap_or_else(|_| Client::new());
+            .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+            .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+            .tcp_keepalive(Duration::from_secs(20))
+            .pool_idle_timeout(Duration::from_secs(25))
+            .pool_max_idle_per_host(2);
+        if let Some((host, addrs)) = resolve_override {
+            builder = builder.resolve_to_addrs(host, addrs);
+        }
+        builder.build().unwrap_or_else(|_| Client::new())
+    }
+
+    pub fn with_retry_base_delay(base_url: impl Into<String>, retry_base_delay: Duration) -> Self {
         Self {
-            http,
+            http: Self::build_http_client(None),
+            fallback_http: Arc::new(RwLock::new(None)),
             base_url: base_url.into().trim_end_matches('/').to_string(),
+            retry_base_delay,
+        }
+    }
+
+    /// Resolves alternate IPv4 edge addresses via Google DNS-over-HTTPS (`dns.google`)
+    /// while keeping full HTTPS SNI & TLS certificate verification for the target host.
+    async fn resolve_alternate_edge_client(&self, target_url: &Url) -> Option<Client> {
+        if target_url.scheme() != "https" {
+            return None;
+        }
+        let host = target_url.host_str()?;
+        if host.eq_ignore_ascii_case("localhost") || host.parse::<IpAddr>().is_ok() {
+            return None;
+        }
+        let port = target_url.port_or_known_default().unwrap_or(443);
+
+        let system_ips: HashSet<IpAddr> =
+            match tokio::time::timeout(Duration::from_secs(2), tokio::net::lookup_host((host, port)))
+                .await
+            {
+                Ok(Ok(iter)) => iter.map(|sa| sa.ip()).collect(),
+                _ => HashSet::new(),
+            };
+
+        let doh_client = Client::builder()
+            .user_agent(FREEHIRE_USER_AGENT)
+            .connect_timeout(Duration::from_secs(DOH_TIMEOUT_SECS))
+            .timeout(Duration::from_secs(DOH_TIMEOUT_SECS))
+            .build()
+            .ok()?;
+
+        let mut doh_url = Url::parse("https://dns.google/resolve").ok()?;
+        doh_url
+            .query_pairs_mut()
+            .append_pair("name", host)
+            .append_pair("type", "A");
+
+        let resp = doh_client
+            .get(doh_url)
+            .header("Accept", "application/dns-json")
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let parsed: DohResponse = resp.json().await.ok()?;
+        let mut all_v4: Vec<SocketAddr> = Vec::new();
+        let mut alternate_v4: Vec<SocketAddr> = Vec::new();
+        for ans in parsed.answer {
+            if ans.record_type != 1 {
+                continue;
+            }
+            if let Ok(IpAddr::V4(v4)) = ans.data.trim().parse::<IpAddr>()
+                && !v4.is_private()
+                && !v4.is_loopback()
+                && !v4.is_link_local()
+                && !v4.is_unspecified()
+                && !v4.is_broadcast()
+                && !v4.is_multicast()
+            {
+                let sa = SocketAddr::new(IpAddr::V4(v4), port);
+                if !all_v4.contains(&sa) {
+                    all_v4.push(sa);
+                    if !system_ips.contains(&IpAddr::V4(v4)) {
+                        alternate_v4.push(sa);
+                    }
+                }
+            }
+        }
+
+        let chosen = if !alternate_v4.is_empty() {
+            alternate_v4
+        } else {
+            all_v4
+        };
+        if chosen.is_empty() {
+            return None;
+        }
+
+        tracing::info!(
+            host,
+            addrs = ?chosen,
+            "Resolved alternate HTTPS edge addresses via DNS-over-HTTPS"
+        );
+        let client = Self::build_http_client(Some((host, &chosen)));
+        *self.fallback_http.write().await = Some(client.clone());
+        Some(client)
+    }
+
+    fn backoff_for_attempt(&self, attempt_idx: usize, retry_after: Option<Duration>) -> Duration {
+        if let Some(server_delay) = retry_after {
+            return server_delay;
+        }
+        let multiplier = match attempt_idx {
+            0 => 1,
+            1 => 3,
+            _ => 5,
+        };
+        self.retry_base_delay
+            .saturating_mul(multiplier)
+            .min(Duration::from_secs(3))
+    }
+
+    async fn send_with_client(
+        client: &Client,
+        url: &Url,
+        force_fresh_connection: bool,
+    ) -> std::result::Result<reqwest::Response, EndpointOutcome> {
+        let mut req = client
+            .get(url.as_str())
+            .header("Accept", "application/json");
+        if force_fresh_connection {
+            req = req.header("Connection", "close");
+        }
+        let started = Instant::now();
+        match req.send().await {
+            Ok(r) => Ok(r),
+            Err(err) => {
+                let is_connect_failure = err.is_connect()
+                    || (err.is_timeout()
+                        && started.elapsed()
+                            < Duration::from_secs(CONNECT_TIMEOUT_SECS.saturating_add(4)));
+                if is_connect_failure {
+                    Err(EndpointOutcome::Unreachable(anyhow!(
+                        "Could not connect to Freehire.me (connection timed out). Check your internet connection or try again shortly."
+                    )))
+                } else if err.is_timeout() {
+                    Err(EndpointOutcome::Transient {
+                        error: anyhow!("Job search timed out waiting for results. Please try again shortly."),
+                        retry_after: None,
+                    })
+                } else {
+                    Err(EndpointOutcome::Transient {
+                        error: anyhow!("Job search network error: {err}"),
+                        retry_after: None,
+                    })
+                }
+            }
         }
     }
 
@@ -92,6 +301,7 @@ impl FreehireProvider {
         filters: &JobFilters,
         limit: usize,
         offset: usize,
+        force_fresh_connection: bool,
     ) -> EndpointOutcome {
         let mut url = match Url::parse(&format!("{}{}", self.base_url, endpoint_path)) {
             Ok(u) => u,
@@ -134,36 +344,75 @@ impl FreehireProvider {
             pairs.append_pair("offset", &offset.to_string());
         }
 
-        let resp = match self
-            .http
-            .get(url.as_str())
-            .header("Accept", "application/json")
-            .send()
-            .await
-        {
-            Ok(r) => r,
-            Err(err) => {
-                if err.is_timeout() {
-                    return EndpointOutcome::Transient(anyhow!(
-                        "Job search timed out. Please try again shortly."
-                    ));
-                } else if err.is_connect() {
-                    return EndpointOutcome::Transient(anyhow!(
-                        "Could not reach the job search service. Check your internet connection or firewall."
-                    ));
-                } else {
-                    return EndpointOutcome::Transient(anyhow!("Job search network error: {err}"));
+        let cached_fallback = self.fallback_http.read().await.clone();
+        let resp = if let Some(ref alt_client) = cached_fallback {
+            match Self::send_with_client(alt_client, &url, force_fresh_connection).await {
+                Ok(r) => r,
+                Err(EndpointOutcome::Unreachable(_)) => {
+                    *self.fallback_http.write().await = None;
+                    match Self::send_with_client(&self.http, &url, true).await {
+                        Ok(r) => r,
+                        Err(EndpointOutcome::Unreachable(sys_err)) => {
+                            if let Some(fresh_alt) = self.resolve_alternate_edge_client(&url).await {
+                                match Self::send_with_client(&fresh_alt, &url, true).await {
+                                    Ok(r) => r,
+                                    Err(outcome) => return outcome,
+                                }
+                            } else {
+                                return EndpointOutcome::Unreachable(sys_err);
+                            }
+                        }
+                        Err(outcome) => return outcome,
+                    }
                 }
+                Err(outcome) => return outcome,
+            }
+        } else {
+            match Self::send_with_client(&self.http, &url, force_fresh_connection).await {
+                Ok(r) => r,
+                Err(EndpointOutcome::Unreachable(sys_err)) => {
+                    tracing::warn!(
+                        endpoint = endpoint_path,
+                        "Primary DNS route unreachable ({sys_err}); attempting alternate HTTPS edge via DoH"
+                    );
+                    if let Some(alt_client) = self.resolve_alternate_edge_client(&url).await {
+                        match Self::send_with_client(&alt_client, &url, true).await {
+                            Ok(r) => r,
+                            Err(outcome) => return outcome,
+                        }
+                    } else {
+                        return EndpointOutcome::Unreachable(sys_err);
+                    }
+                }
+                Err(outcome) => return outcome,
             }
         };
 
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let retry_after = parse_retry_after(resp.headers());
+        let body = match resp.text().await {
+            Ok(text) => text,
+            Err(err) => {
+                return EndpointOutcome::Transient {
+                    error: anyhow!("Job search response stream interrupted: {err}"),
+                    retry_after: None,
+                };
+            }
+        };
 
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return EndpointOutcome::Fatal(anyhow!(
-                "Job search rate limit reached (HTTP 429). Wait a moment before refreshing."
-            ));
+            return EndpointOutcome::Transient {
+                error: anyhow!(
+                    "Job search rate limit reached (HTTP 429). Wait a moment before refreshing."
+                ),
+                retry_after: Some(retry_after.unwrap_or_else(|| Duration::from_secs(2))),
+            };
+        }
+        if status == reqwest::StatusCode::REQUEST_TIMEOUT {
+            return EndpointOutcome::Transient {
+                error: anyhow!("Job search request timed out (HTTP 408)."),
+                retry_after,
+            };
         }
         if matches!(
             status,
@@ -176,11 +425,14 @@ impl FreehireProvider {
                 status.as_u16()
             ));
         }
-        if status.is_server_error() {
-            return EndpointOutcome::Transient(anyhow!(
-                "Job search service temporarily unavailable (HTTP {}).",
-                status.as_u16()
-            ));
+        if status.is_server_error() || matches!(status.as_u16(), 520..=530) {
+            return EndpointOutcome::Transient {
+                error: anyhow!(
+                    "Job search service temporarily unavailable (HTTP {}).",
+                    status.as_u16()
+                ),
+                retry_after,
+            };
         }
         if !status.is_success() {
             let api_msg = serde_json::from_str::<FreehireErrorEnvelope>(&body)
@@ -191,10 +443,25 @@ impl FreehireProvider {
                 Some(msg) => anyhow!("Job search error (HTTP {}): {msg}", status.as_u16()),
                 None => anyhow!("Job search returned HTTP {}.", status.as_u16()),
             };
+            if matches!(
+                status,
+                reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::UNPROCESSABLE_ENTITY
+            ) {
+                return EndpointOutcome::BadQuery(err);
+            }
             return EndpointOutcome::Fatal(err);
         }
 
-        match serde_json::from_str::<FreehireSearchResponse>(&body)
+        let trimmed_body = body.trim();
+        if trimmed_body.is_empty() || trimmed_body.starts_with('<') {
+            // Empty body or unexpected HTML edge/interstitial page on HTTP 200 — retry cleanly.
+            return EndpointOutcome::Transient {
+                error: anyhow!("Job search service returned an incomplete response."),
+                retry_after: None,
+            };
+        }
+
+        match serde_json::from_str::<FreehireSearchResponse>(trimmed_body)
             .context("Failed to parse job search JSON response")
         {
             Ok(parsed) => {
@@ -208,7 +475,62 @@ impl FreehireProvider {
                 }
                 EndpointOutcome::Ok(parsed)
             }
+            Err(err) if trimmed_body.starts_with('{') && !trimmed_body.ends_with('}') => {
+                // Truncated JSON payload from an interrupted connection.
+                EndpointOutcome::Transient {
+                    error: err,
+                    retry_after: None,
+                }
+            }
             Err(err) => EndpointOutcome::Fatal(err),
+        }
+    }
+
+    async fn query_endpoint_with_retries(
+        &self,
+        endpoint_path: &str,
+        query: &str,
+        filters: &JobFilters,
+        limit: usize,
+        offset: usize,
+        max_attempts: usize,
+    ) -> EndpointOutcome {
+        let mut last_transient: Option<anyhow::Error> = None;
+        for attempt in 0..max_attempts {
+            let force_fresh = attempt > 0;
+            match self
+                .query_endpoint_once(endpoint_path, query, filters, limit, offset, force_fresh)
+                .await
+            {
+                EndpointOutcome::Ok(resp) => return EndpointOutcome::Ok(resp),
+                EndpointOutcome::Unsupported(err) => return EndpointOutcome::Unsupported(err),
+                EndpointOutcome::Unreachable(err) => return EndpointOutcome::Unreachable(err),
+                EndpointOutcome::BadQuery(err) => return EndpointOutcome::BadQuery(err),
+                EndpointOutcome::Fatal(err) => return EndpointOutcome::Fatal(err),
+                EndpointOutcome::Transient { error, retry_after } => {
+                    let is_last = attempt + 1 >= max_attempts;
+                    if is_last {
+                        last_transient = Some(error);
+                        break;
+                    }
+                    let delay = self.backoff_for_attempt(attempt, retry_after);
+                    tracing::info!(
+                        endpoint = endpoint_path,
+                        attempt = attempt + 1,
+                        delay_ms = delay.as_millis() as u64,
+                        "Transient job search error ({error}); retrying with fresh connection"
+                    );
+                    if !delay.is_zero() {
+                        tokio::time::sleep(delay).await;
+                    }
+                    last_transient = Some(error);
+                }
+            }
+        }
+        EndpointOutcome::Transient {
+            error: last_transient
+                .unwrap_or_else(|| anyhow!("Job search failed after retries. Please try again.")),
+            retry_after: None,
         }
     }
 
@@ -218,42 +540,69 @@ impl FreehireProvider {
         filters: &JobFilters,
         limit: usize,
         offset: usize,
-    ) -> Result<FreehireSearchResponse> {
-        // Attempt 1 on primary `/agent/jobs/search` (returns full Markdown JDs).
+    ) -> SearchQueryOutcome {
         match self
-            .query_endpoint_once("/agent/jobs/search", query, filters, limit, offset)
+            .query_endpoint_with_retries(
+                "/agent/jobs/search",
+                query,
+                filters,
+                limit,
+                offset,
+                PRIMARY_MAX_ATTEMPTS,
+            )
             .await
         {
-            EndpointOutcome::Ok(resp) => Ok(resp),
-            EndpointOutcome::Fatal(err) => Err(err),
+            EndpointOutcome::Ok(resp) => SearchQueryOutcome::Ok(resp, false),
+            EndpointOutcome::Unreachable(err) => SearchQueryOutcome::Unreachable(err),
+            EndpointOutcome::BadQuery(err) | EndpointOutcome::Fatal(err) => {
+                SearchQueryOutcome::Failed(err)
+            }
             EndpointOutcome::Unsupported(orig_err) => {
                 tracing::warn!(
-                    "Primary job search endpoint unsupported ({orig_err}); trying standard search endpoint"
+                    "Primary job search endpoint unsupported ({orig_err}); trying standard /jobs/search endpoint"
                 );
                 match self
-                    .query_endpoint_once("/jobs/search", query, filters, limit, offset)
+                    .query_endpoint_with_retries(
+                        "/jobs/search",
+                        query,
+                        filters,
+                        limit,
+                        offset,
+                        FALLBACK_MAX_ATTEMPTS,
+                    )
                     .await
                 {
-                    EndpointOutcome::Ok(resp) => Ok(resp),
+                    EndpointOutcome::Ok(resp) => SearchQueryOutcome::Ok(resp, true),
+                    EndpointOutcome::Unreachable(e) => SearchQueryOutcome::Unreachable(e),
                     EndpointOutcome::Fatal(e)
-                    | EndpointOutcome::Transient(e)
-                    | EndpointOutcome::Unsupported(e) => Err(e),
+                    | EndpointOutcome::BadQuery(e)
+                    | EndpointOutcome::Unsupported(e)
+                    | EndpointOutcome::Transient { error: e, .. } => SearchQueryOutcome::Failed(e),
                 }
             }
-            EndpointOutcome::Transient(first_err) => {
-                // One polite backoff retry for cold-start timeouts / transient TLS resets.
-                tracing::info!(
-                    "Transient job search error ({first_err}); retrying once after 700ms"
+            EndpointOutcome::Transient {
+                error: primary_err, ..
+            } => {
+                tracing::warn!(
+                    "Primary /agent/jobs/search failed after {PRIMARY_MAX_ATTEMPTS} attempts ({primary_err}); falling back to /jobs/search"
                 );
-                tokio::time::sleep(Duration::from_millis(700)).await;
                 match self
-                    .query_endpoint_once("/agent/jobs/search", query, filters, limit, offset)
+                    .query_endpoint_with_retries(
+                        "/jobs/search",
+                        query,
+                        filters,
+                        limit,
+                        offset,
+                        FALLBACK_MAX_ATTEMPTS,
+                    )
                     .await
                 {
-                    EndpointOutcome::Ok(resp) => Ok(resp),
-                    EndpointOutcome::Fatal(e)
-                    | EndpointOutcome::Transient(e)
-                    | EndpointOutcome::Unsupported(e) => Err(e),
+                    EndpointOutcome::Ok(resp) => SearchQueryOutcome::Ok(resp, true),
+                    EndpointOutcome::Unreachable(e) => SearchQueryOutcome::Unreachable(e),
+                    EndpointOutcome::Fatal(_)
+                    | EndpointOutcome::BadQuery(_)
+                    | EndpointOutcome::Unsupported(_)
+                    | EndpointOutcome::Transient { .. } => SearchQueryOutcome::Failed(primary_err),
                 }
             }
         }
@@ -292,7 +641,7 @@ pub fn build_freehire_query(
 
     let primary = title_clauses.join(" OR ");
 
-    // Broader fallback (only used if strict `title:` returned 0 hits on page 1):
+    // Broader fallback (only used if strict `title:` returned 0 hits on page 1 or 400):
     // drop `title:` prefix so Freehire searches title + description for the role titles.
     let broad_terms: Vec<String> = active
         .iter()
@@ -373,20 +722,44 @@ impl JobProvider for FreehireProvider {
         let active_profiles: Vec<&SearchProfile> = profiles.iter().filter(|p| p.enabled).collect();
         let is_custom = !filters.manual_query.trim().is_empty();
 
-        let mut resp = self
+        let (mut resp, mut used_fallback_endpoint) = match self
             .query_with_polite_retry(&primary_q, filters, page_size, offset)
-            .await?;
+            .await
+        {
+            SearchQueryOutcome::Ok(r, fb) => (r, fb),
+            SearchQueryOutcome::Unreachable(err) => return Err(err),
+            SearchQueryOutcome::Failed(primary_err) => {
+                if let Some(broad) = broad_q.as_deref()
+                    && primary_q.contains("title:")
+                {
+                    tracing::info!(
+                        "Primary title-scoped job query failed ({primary_err}); retrying with broader query"
+                    );
+                    match self
+                        .query_with_polite_retry(broad, filters, page_size, offset)
+                        .await
+                    {
+                        SearchQueryOutcome::Ok(r, fb) => (r, fb),
+                        SearchQueryOutcome::Unreachable(err) => return Err(err),
+                        SearchQueryOutcome::Failed(_) => return Err(primary_err),
+                    }
+                } else {
+                    return Err(primary_err);
+                }
+            }
+        };
 
         // If strict `title:` query had 0 hits on page 1, broaden once politely.
         if resp.data.is_empty()
             && page == 1
             && let Some(broad) = broad_q.as_deref()
-            && let Ok(broader) = self
+            && let SearchQueryOutcome::Ok(broader, fb) = self
                 .query_with_polite_retry(broad, filters, page_size, offset)
                 .await
             && !broader.data.is_empty()
         {
             resp = broader;
+            used_fallback_endpoint |= fb;
         }
 
         let mut total_estimated = resp.meta.as_ref().map(|m| m.total).unwrap_or(0);
@@ -445,6 +818,15 @@ impl JobProvider for FreehireProvider {
             total_estimated = jobs.len() as u64;
         }
 
+        let warnings = if used_fallback_endpoint {
+            vec![
+                "Loaded from the standard search endpoint while the primary endpoint was busy."
+                    .to_string(),
+            ]
+        } else {
+            Vec::new()
+        };
+
         Ok(JobSearchResult {
             jobs,
             total_estimated,
@@ -452,7 +834,7 @@ impl JobProvider for FreehireProvider {
             page_size,
             has_next_page,
             from_cache: false,
-            warnings: Vec::new(),
+            warnings,
         })
     }
 }

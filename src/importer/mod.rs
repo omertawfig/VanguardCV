@@ -165,6 +165,8 @@ pub struct ImportDraft {
     pub detected_vanguard_format: bool,
     pub warnings: Vec<String>,
     pub lines: Vec<ImportLine>,
+    cached_body: SanitizedCvBody,
+    cached_stats: ImportStats,
 }
 
 impl ImportDraft {
@@ -189,6 +191,16 @@ impl ImportDraft {
             }
         };
 
+        const MAX_IMPORT_FILE_BYTES: u64 = 25 * 1024 * 1024; // 25 MiB
+        let meta = std::fs::metadata(path)
+            .with_context(|| format!("Could not inspect {}", path.display()))?;
+        if meta.len() > MAX_IMPORT_FILE_BYTES {
+            bail!(
+                "Selected file is too large to import ({:.1} MB; maximum supported size is 25 MB).",
+                meta.len() as f64 / (1024.0 * 1024.0)
+            );
+        }
+
         let bytes = std::fs::read(path)
             .with_context(|| format!("Could not read {}", path.display()))?;
         let file_name = path
@@ -203,32 +215,56 @@ impl ImportDraft {
         }
     }
 
+    fn from_classified_lines(
+        file_name: &str,
+        source_format: ImportSourceFormat,
+        detected_vanguard_format: bool,
+        warnings: Vec<String>,
+        lines: Vec<ImportLine>,
+    ) -> Self {
+        let (cached_body, cached_stats) = compute_body_and_stats(&lines);
+        Self {
+            source_file_name: file_name.to_string(),
+            suggested_title: suggest_title_from_filename(file_name),
+            source_format,
+            detected_vanguard_format,
+            warnings,
+            lines,
+            cached_body,
+            cached_stats,
+        }
+    }
+
+    fn refresh_cache(&mut self) {
+        let (body, stats) = compute_body_and_stats(&self.lines);
+        self.cached_body = body;
+        self.cached_stats = stats;
+    }
+
     /// Parses raw `.docx` bytes into an interactive [`ImportDraft`].
     pub fn from_docx_bytes(file_name: &str, bytes: &[u8]) -> Result<Self> {
         let raw_lines = docx::extract_docx_lines(bytes)?;
         let (lines, detected_vanguard_format) = classifier::classify_lines(raw_lines);
-        Ok(Self {
-            source_file_name: file_name.to_string(),
-            suggested_title: suggest_title_from_filename(file_name),
-            source_format: ImportSourceFormat::Docx,
+        Ok(Self::from_classified_lines(
+            file_name,
+            ImportSourceFormat::Docx,
             detected_vanguard_format,
-            warnings: Vec::new(),
+            Vec::new(),
             lines,
-        })
+        ))
     }
 
     /// Parses raw `.pdf` bytes into an interactive [`ImportDraft`].
     pub fn from_pdf_bytes(file_name: &str, bytes: &[u8]) -> Result<Self> {
         let (raw_lines, warnings) = pdf::extract_pdf_lines(bytes)?;
         let (lines, detected_vanguard_format) = classifier::classify_lines(raw_lines);
-        Ok(Self {
-            source_file_name: file_name.to_string(),
-            suggested_title: suggest_title_from_filename(file_name),
-            source_format: ImportSourceFormat::Pdf,
+        Ok(Self::from_classified_lines(
+            file_name,
+            ImportSourceFormat::Pdf,
             detected_vanguard_format,
             warnings,
             lines,
-        })
+        ))
     }
 
     /// Assigns a new role to line `index`.
@@ -294,6 +330,7 @@ impl ImportDraft {
                 }
             }
         }
+        self.refresh_cache();
     }
 
     /// Updates the layout kind (`Timeline`, `Bullets`, `Summary`, `Skills`) on a `Section` line.
@@ -302,6 +339,7 @@ impl ImportDraft {
             line.role = ImportLineRole::Section { kind };
             line.is_likely_pii_header = false;
             line.user_modified = true;
+            self.refresh_cache();
         }
     }
 
@@ -314,6 +352,7 @@ impl ImportDraft {
         let child_text = self.lines[index].text.trim().to_string();
         if child_text.is_empty() {
             self.lines.remove(index);
+            self.refresh_cache();
             return true;
         }
         let prev = &mut self.lines[index - 1];
@@ -328,6 +367,7 @@ impl ImportDraft {
         }
         prev.user_modified = true;
         self.lines.remove(index);
+        self.refresh_cache();
         true
     }
 
@@ -345,6 +385,7 @@ impl ImportDraft {
             line.is_likely_pii_header = true;
             line.user_modified = true;
         }
+        self.refresh_cache();
     }
 
     /// Resets every line's role back to the default automatic parser decision.
@@ -353,57 +394,27 @@ impl ImportDraft {
             line.role = line.auto_role;
             line.user_modified = false;
         }
+        self.refresh_cache();
+    }
+
+    /// Returns the cached compiled `SanitizedCvBody` for zero-cost per-frame rendering.
+    pub fn cached_body(&self) -> &SanitizedCvBody {
+        &self.cached_body
+    }
+
+    /// Returns the cached [`ImportStats`] for zero-cost per-frame rendering.
+    pub fn cached_stats(&self) -> ImportStats {
+        self.cached_stats
     }
 
     /// Compiles the current verified line roles into a `SanitizedCvBody`.
     pub fn build_body(&self) -> SanitizedCvBody {
-        classifier::build_body_from_lines(&self.lines)
+        self.cached_body.clone()
     }
 
-    /// Computes live stats for the verification preview header.
+    /// Returns live stats for the verification preview header.
     pub fn stats(&self) -> ImportStats {
-        let body = self.build_body();
-        let mut entries = 0usize;
-        let mut points = 0usize;
-        for sec in &body.sections {
-            match &sec.kind {
-                SectionKind::Summary { text } => {
-                    if !text.trim().is_empty() {
-                        points += 1;
-                    }
-                }
-                SectionKind::TimelineEntries { entries: list } => {
-                    entries += list.len();
-                    for e in list {
-                        points += e.bullets.len();
-                    }
-                }
-                SectionKind::CategorizedInlineList { categories } => {
-                    points += categories.len();
-                }
-                SectionKind::SimpleBulletList { items } => {
-                    points += items.len();
-                }
-            }
-        }
-        let skipped = self
-            .lines
-            .iter()
-            .filter(|l| l.role == ImportLineRole::Skip)
-            .count();
-        let pii_header_skipped = self
-            .lines
-            .iter()
-            .filter(|l| l.role == ImportLineRole::Skip && l.is_likely_pii_header)
-            .count();
-
-        ImportStats {
-            sections: body.sections.len(),
-            entries,
-            points,
-            skipped,
-            pii_header_skipped,
-        }
+        self.cached_stats
     }
 
     /// Produces the final Master [`CvDocument`] ready to persist.
@@ -422,6 +433,50 @@ impl ImportDraft {
         doc.body = self.build_body();
         doc
     }
+}
+
+fn compute_body_and_stats(lines: &[ImportLine]) -> (SanitizedCvBody, ImportStats) {
+    let body = classifier::build_body_from_lines(lines);
+    let mut entries = 0usize;
+    let mut points = 0usize;
+    for sec in &body.sections {
+        match &sec.kind {
+            SectionKind::Summary { text } => {
+                if !text.trim().is_empty() {
+                    points += 1;
+                }
+            }
+            SectionKind::TimelineEntries { entries: list } => {
+                entries += list.len();
+                for e in list {
+                    points += e.bullets.len();
+                }
+            }
+            SectionKind::CategorizedInlineList { categories } => {
+                points += categories.len();
+            }
+            SectionKind::SimpleBulletList { items } => {
+                points += items.len();
+            }
+        }
+    }
+    let skipped = lines
+        .iter()
+        .filter(|l| l.role == ImportLineRole::Skip)
+        .count();
+    let pii_header_skipped = lines
+        .iter()
+        .filter(|l| l.role == ImportLineRole::Skip && l.is_likely_pii_header)
+        .count();
+
+    let stats = ImportStats {
+        sections: body.sections.len(),
+        entries,
+        points,
+        skipped,
+        pii_header_skipped,
+    };
+    (body, stats)
 }
 
 fn suggest_title_from_filename(file_name: &str) -> String {

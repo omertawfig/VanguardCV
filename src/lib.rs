@@ -9,6 +9,7 @@ pub mod importer;
 pub mod jobs;
 pub mod mocks;
 pub mod pdf;
+pub mod platform;
 pub mod privacy;
 pub mod runtime;
 pub mod theme;

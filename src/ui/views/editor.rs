@@ -5,11 +5,11 @@ use crate::contracts::{
     AiProposal, AiProviderKind, BulletItem, CvDocument, CvSection, ItemId, SectionKind,
     TimelineEntry,
 };
-use crate::ui::components::ui::{
+use crate::ui::components::ui::{render_checkbox,
     ButtonVariant, IconName, el_id, render_button, render_diff_text, render_empty_state,
     render_icon, render_icon_button, render_toggle,
 };
-use crate::ui::theme::Theme;
+use crate::ui::theme::{RADIUS_MD, Theme};
 use crate::ui::workspace::{
     DragGhostView, EditorDragKind, EditorDragPayload, UiProposal, WorkspaceView, WorkspaceViewPage,
 };
@@ -105,7 +105,7 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                 .flex()
                                 .items_center()
                                 .gap(px(8.0))
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme.muted)
                                 .child(render_icon(
@@ -136,7 +136,7 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                             .rounded(px(4.0))
                                             .bg(theme.accent_soft)
                                             .text_color(theme.accent_text)
-                                            .text_size(px(10.5))
+                                            .text_size(px(11.0))
                                             .child("AI-protected"),
                                     )
                                 }),
@@ -316,13 +316,13 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                                 .rounded(px(4.0))
                                                 .bg(theme.accent_soft)
                                                 .text_color(theme.accent_text)
-                                                .text_size(px(10.5))
+                                                .text_size(px(11.0))
                                                 .child("Local only"),
                                         ),
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(12.5))
+                                        .text_size(px(13.0))
                                         .text_color(theme.secondary)
                                         .child(if doc.pii_header.full_name.is_empty() {
                                             "Add your name and contact information".to_string()
@@ -525,7 +525,7 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                 .p(px(8.0))
                                 .rounded(px(4.0))
                                 .bg(theme.input)
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .line_height(px(17.0))
                                 .text_color(theme.secondary)
                                 .child(snippet),
@@ -743,7 +743,7 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                         .min_w_0()
                                         .when(is_bullet, |d| d.pl(px(8.0)))
                                         .when(is_heading, |d| d.pt(px(4.0)))
-                                        .text_size(px(12.5))
+                                        .text_size(px(13.0))
                                         .line_height(px(18.5))
                                         .font_weight(if is_heading {
                                             FontWeight::SEMIBOLD
@@ -804,7 +804,7 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                     .flex_col()
                                     .child(
                                         div()
-                                            .text_size(px(13.5))
+                                            .text_size(px(14.0))
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(theme.accent_text)
                                             .child(format!(
@@ -888,7 +888,7 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                         .gap(px(8.0))
                         .child(
                             div()
-                                .text_size(px(15.0))
+                                .text_size(px(16.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child("CV sections"),
@@ -958,7 +958,7 @@ pub fn render_editor_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_size(px(11.5))
+                        .text_size(px(12.0))
                         .line_height(px(16.5))
                         .text_color(theme.muted)
                         .child("Drag the six-dot handle on the left to reorder sections, entries, bullets, or skills · Only enabled items appear in your PDF"),
@@ -1073,7 +1073,7 @@ fn render_proposal_card(
                                     .bg(theme.input)
                                     .border_1()
                                     .border_color(theme.border_soft)
-                                    .text_size(px(10.0))
+                                    .text_size(px(11.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme.secondary)
                                     .child("Edited"),
@@ -1086,7 +1086,7 @@ fn render_proposal_card(
                                     .py(px(1.0))
                                     .rounded(px(4.0))
                                     .bg(theme.accent_soft)
-                                    .text_size(px(10.0))
+                                    .text_size(px(11.0))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme.accent_text)
                                     .child("Editing"),
@@ -1109,7 +1109,7 @@ fn render_proposal_card(
                         .min_w_0()
                         .px(px(10.0))
                         .py(px(8.0))
-                        .rounded(px(5.0))
+                        .rounded(px(6.0))
                         .bg(theme.input)
                         .border_1()
                         .border_color(theme.border_soft)
@@ -1122,7 +1122,7 @@ fn render_proposal_card(
                                 .w(px(14.0))
                                 .pt(px(1.0))
                                 .text_center()
-                                .text_size(px(12.5))
+                                .text_size(px(13.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.del_text)
                                 .child("-"),
@@ -1142,7 +1142,7 @@ fn render_proposal_card(
                             .min_w_0()
                             .px(px(10.0))
                             .py(px(8.0))
-                            .rounded(px(5.0))
+                            .rounded(px(6.0))
                             .bg(theme.input)
                             .border_1()
                             .border_color(theme.border_soft)
@@ -1155,7 +1155,7 @@ fn render_proposal_card(
                                     .w(px(14.0))
                                     .pt(px(1.0))
                                     .text_center()
-                                    .text_size(px(12.5))
+                                    .text_size(px(13.0))
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(theme.add_text)
                                     .child("+"),
@@ -1188,7 +1188,7 @@ fn render_proposal_card(
                                     .gap(px(6.0))
                                     .child(
                                         div()
-                                            .text_size(px(11.5))
+                                            .text_size(px(12.0))
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(theme.text)
                                             .child(edit_field_label),
@@ -1209,7 +1209,7 @@ fn render_proposal_card(
                                     .h(px(editor_height))
                                     .px(px(10.0))
                                     .py(px(6.0))
-                                    .rounded(px(5.0))
+                                    .rounded(px(6.0))
                                     .bg(theme.input)
                                     .border_1()
                                     .border_color(theme.accent)
@@ -1228,7 +1228,7 @@ fn render_proposal_card(
                     .p(px(8.0))
                     .rounded(px(4.0))
                     .bg(theme.del_bg)
-                    .text_size(px(11.5))
+                    .text_size(px(12.0))
                     .line_height(px(17.0))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.del_text)
@@ -1240,7 +1240,7 @@ fn render_proposal_card(
             div()
                 .w_full()
                 .min_w_0()
-                .text_size(px(11.5))
+                .text_size(px(12.0))
                 .line_height(px(17.0))
                 .text_color(theme.secondary)
                 .child(if prop.rationale.is_empty() {
@@ -1575,13 +1575,15 @@ fn render_section_card(
                             .flex_wrap()
                             .gap_x(px(8.0))
                             .gap_y(px(4.0))
+                            .rounded(px(4.0))
+                            .hover(|s| s.opacity(0.85))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.toggle_section_expand(sec_id);
                                 cx.notify();
                             }))
                             .child(
                                 div()
-                                    .text_size(px(13.5))
+                                    .text_size(px(14.0))
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(theme.text)
                                     .child(sec.title.clone()),
@@ -1591,7 +1593,7 @@ fn render_section_card(
                                     .flex_shrink_0()
                                     .px(px(8.0))
                                     .py(px(2.0))
-                                    .rounded(px(10.0))
+                                    .rounded_full()
                                     .bg(theme.input)
                                     .text_size(px(11.0))
                                     .font_weight(FontWeight::MEDIUM)
@@ -1607,7 +1609,7 @@ fn render_section_card(
                                         .rounded(px(4.0))
                                         .bg(theme.accent_soft)
                                         .text_color(theme.accent_text)
-                                        .text_size(px(10.0))
+                                        .text_size(px(11.0))
                                         .font_weight(FontWeight::BOLD)
                                         .child(format!("{sec_pending} pending")),
                                 )
@@ -1756,7 +1758,7 @@ fn render_section_content(
                             div()
                                 .flex_1()
                                 .min_w(px(160.0))
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .text_color(theme.muted)
                                 .child("A short, factual introduction to your professional experience."),
                         )
@@ -1789,7 +1791,7 @@ fn render_section_content(
                 list = list.child(
                     div()
                         .p(px(10.0))
-                        .rounded(px(5.0))
+                        .rounded(px(6.0))
                         .bg(theme.input)
                         .text_size(px(12.0))
                         .text_color(theme.muted)
@@ -1829,7 +1831,7 @@ fn render_section_content(
                 list = list.child(
                     div()
                         .p(px(10.0))
-                        .rounded(px(5.0))
+                        .rounded(px(6.0))
                         .bg(theme.input)
                         .text_size(px(12.0))
                         .text_color(theme.muted)
@@ -1863,7 +1865,7 @@ fn render_section_content(
                     .gap(px(10.0))
                     .px(px(14.0))
                     .py(px(12.0))
-                    .rounded(px(7.0))
+                    .rounded(px(6.0))
                     .bg(if cat_is_dragging {
                         theme.accent_soft
                     } else {
@@ -1926,7 +1928,7 @@ fn render_section_content(
                                             .gap(px(8.0))
                                             .child(
                                                 div()
-                                                    .text_size(px(13.5))
+                                                    .text_size(px(14.0))
                                                     .font_weight(FontWeight::SEMIBOLD)
                                                     .text_color(theme.text)
                                                     .child(cat.category_label.clone()),
@@ -1936,9 +1938,9 @@ fn render_section_content(
                                                     .flex_shrink_0()
                                                     .px(px(7.0))
                                                     .py(px(1.5))
-                                                    .rounded(px(10.0))
+                                                    .rounded_full()
                                                     .bg(theme.input)
-                                                    .text_size(px(10.5))
+                                                    .text_size(px(11.0))
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(theme.muted)
                                                     .child(format!(
@@ -2020,7 +2022,7 @@ fn render_section_content(
                                     .bg(theme.input)
                                     .border_1()
                                     .border_color(theme.border_soft)
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme.text)
                                     .child(skill.clone())
@@ -2067,7 +2069,7 @@ fn render_section_content(
                 list = list.child(
                     div()
                         .p(px(10.0))
-                        .rounded(px(5.0))
+                        .rounded(px(6.0))
                         .bg(theme.input)
                         .text_size(px(12.0))
                         .text_color(theme.muted)
@@ -2132,7 +2134,7 @@ fn render_timeline_entry(
         .min_w_0()
         .flex()
         .flex_col()
-        .rounded(px(7.0))
+        .rounded(px(RADIUS_MD))
         .overflow_hidden()
         .border_1()
         .border_color(if entry_is_dragging {
@@ -2180,50 +2182,37 @@ fn render_timeline_entry(
                     .flex()
                     .items_center()
                     .gap(px(10.0))
-                    // Six-dot drag handle
-                    .child(render_drag_handle(
-                        format!("drag-entry-{}", entry.id),
-                        EditorDragPayload {
-                            kind: entry_drag_kind,
-                            label: if entry.primary_heading.is_empty() {
-                                "Untitled entry".to_string()
-                            } else {
-                                entry.primary_heading.clone()
-                            },
-                            sublabel: entry.secondary_heading.clone(),
-                        },
-                        theme,
-                        cx,
-                    ))
-                    // Checkbox
+                    // Paired drag grip + checkbox cluster
                     .child(
                         div()
-                            .id(el_id(format!("entry-chk-{}", entry.id)))
                             .flex_shrink_0()
-                            .cursor_pointer()
-                            .size(px(15.0))
-                            .rounded(px(4.0))
-                            .border_1()
-                            .border_color(if entry.enabled {
-                                theme.accent
-                            } else {
-                                theme.border
-                            })
-                            .bg(if entry.enabled {
-                                theme.accent
-                            } else {
-                                theme.input
-                            })
                             .flex()
                             .items_center()
-                            .justify_center()
-                            .when(entry.enabled, |el| {
-                                el.child(render_icon(IconName::Check, 10.0, rgb(0xffffff)))
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.toggle_entry_enabled(sec_id, entry_id_toggle, cx);
-                                cx.notify();
-                            })),
+                            .gap(px(4.0))
+                            .child(render_drag_handle(
+                                format!("drag-entry-{}", entry.id),
+                                EditorDragPayload {
+                                    kind: entry_drag_kind,
+                                    label: if entry.primary_heading.is_empty() {
+                                        "Untitled entry".to_string()
+                                    } else {
+                                        entry.primary_heading.clone()
+                                    },
+                                    sublabel: entry.secondary_heading.clone(),
+                                },
+                                theme,
+                                cx,
+                            ))
+                            .child(render_checkbox(
+                                format!("entry-chk-{}", entry.id),
+                                entry.enabled,
+                                16.0,
+                                theme,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.toggle_entry_enabled(sec_id, entry_id_toggle, cx);
+                                    cx.notify();
+                                }),
+                            )),
                     )
                     // Headings
                     .child(
@@ -2232,6 +2221,8 @@ fn render_timeline_entry(
                             .flex_1()
                             .min_w_0()
                             .cursor_pointer()
+                            .rounded(px(4.0))
+                            .hover(|s| s.opacity(0.85))
                             .flex()
                             .flex_col()
                             .gap(px(3.0))
@@ -2289,7 +2280,7 @@ fn render_timeline_entry(
                                 .bg(theme.input)
                                 .border_1()
                                 .border_color(theme.border_soft)
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme.secondary)
                                 .child(date_text),
@@ -2383,18 +2374,20 @@ fn render_timeline_entry(
             ));
         }
 
-        bullets_div = bullets_div.child(div().pt(px(4.0)).child(render_button(
-            format!("add-bullet-to-{}", entry.id),
-            "Add achievement",
+        bullets_div = bullets_div.child(
+            div().pt(px(4.0)).flex().items_center().child(render_button(
+                format!("add-bullet-to-{}", entry.id),
+                "Add achievement",
             Some(IconName::Plus),
             ButtonVariant::Ghost,
             false,
             theme,
-            cx.listener(move |this, _, _, cx| {
-                this.open_add_bullet_dialog(sec_id_b, Some(entry_id_b), cx);
-                cx.notify();
-            }),
-        )));
+                cx.listener(move |this, _, _, cx| {
+                    this.open_add_bullet_dialog(sec_id_b, Some(entry_id_b), cx);
+                    cx.notify();
+                }),
+            )),
+        );
 
         container = container.child(bullets_div);
     }
@@ -2458,6 +2451,10 @@ fn render_bullet_row(
             theme.border_soft
         })
         .when(bullet_is_dragging, |s| s.opacity(0.72).shadow_md())
+        .when(!bullet_is_dragging, |s| {
+            let hover_border = theme.border_control;
+            s.hover(move |h| h.border_color(hover_border))
+        })
         .when(!item.enabled && !bullet_is_dragging, |s| s.opacity(0.55))
         .on_drag_move::<EditorDragPayload>(cx.listener(
             move |this, event: &DragMoveEvent<EditorDragPayload>, _window, cx| {
@@ -2490,67 +2487,55 @@ fn render_bullet_row(
                     .flex()
                     .items_start()
                     .gap(px(8.0))
-                    // Six-dot drag handle
-                    .child(render_drag_handle(
-                        format!("drag-bullet-{}", item.id),
-                        EditorDragPayload {
-                            kind: bullet_drag_kind,
-                            label: if bullet_preview.is_empty() {
-                                "Achievement".to_string()
-                            } else {
-                                bullet_preview
-                            },
-                            sublabel: None,
-                        },
-                        theme,
-                        cx,
-                    ))
-                    // Checkbox
+                    // Paired drag grip + checkbox cluster aligned with first line of text
                     .child(
                         div()
-                            .id(el_id(format!("bullet-chk-{}", item.id)))
                             .flex_shrink_0()
-                            .cursor_pointer()
-                            .mt(px(3.0))
-                            .size(px(14.0))
-                            .rounded(px(3.5))
-                            .border_1()
-                            .border_color(if item.enabled {
-                                theme.accent
-                            } else {
-                                theme.border
-                            })
-                            .bg(if item.enabled {
-                                theme.accent
-                            } else {
-                                theme.surface
-                            })
                             .flex()
                             .items_center()
-                            .justify_center()
-                            .when(item.enabled, |el| {
-                                el.child(render_icon(IconName::Check, 10.0, rgb(0xffffff)))
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.toggle_bullet_enabled(sec_id, entry_id, item_id_chk, cx);
-                                cx.notify();
-                            })),
+                            .gap(px(4.0))
+                            .child(render_drag_handle(
+                                format!("drag-bullet-{}", item.id),
+                                EditorDragPayload {
+                                    kind: bullet_drag_kind,
+                                    label: if bullet_preview.is_empty() {
+                                        "Achievement".to_string()
+                                    } else {
+                                        bullet_preview
+                                    },
+                                    sublabel: None,
+                                },
+                                theme,
+                                cx,
+                            ))
+                            .child(render_checkbox(
+                                format!("bullet-chk-{}", item.id),
+                                item.enabled,
+                                16.0,
+                                theme,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.toggle_bullet_enabled(sec_id, entry_id, item_id_chk, cx);
+                                    cx.notify();
+                                }),
+                            )),
                     )
-                    // Bullet text
+                    // Bullet text (top-padded 2.5px so 19px first-line center matches 24px controls)
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(12.5))
+                            .pt(px(2.5))
+                            .text_size(px(13.0))
                             .line_height(px(19.0))
                             .text_color(theme.text)
                             .child(item.text.clone()),
                     ),
             )
-            // Bullet actions
+            // Bullet actions (aligned with first-line horizontal axis)
             .child(
                 div()
                     .flex_shrink_0()
+                    .mt(px(-3.0))
                     .flex()
                     .items_center()
                     .gap(px(4.0))

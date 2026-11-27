@@ -77,14 +77,14 @@ pub fn render_skills_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                         .gap(px(4.0))
                         .child(
                             div()
-                                .text_size(px(26.0))
+                                .text_size(px(24.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child("AI skills"),
                         )
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .text_color(theme.secondary)
                                 .child(
                                     "Choose the instructions injected into the AI tailoring agent.",
@@ -203,7 +203,7 @@ pub fn render_skills_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                         .gap(px(8.0))
                                         .child(
                                             div()
-                                                .text_size(px(13.5))
+                                                .text_size(px(14.0))
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(theme.text)
                                                 .child(banner_title),
@@ -223,7 +223,7 @@ pub fn render_skills_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                                 } else {
                                                     theme.accent_text
                                                 })
-                                                .text_size(px(10.5))
+                                                .text_size(px(11.0))
                                                 .font_weight(FontWeight::BOLD)
                                                 .child(banner_badge),
                                         ),
@@ -263,7 +263,7 @@ pub fn render_skills_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                 .flex()
                 .items_center()
                 .justify_between()
-                .text_size(px(11.5))
+                .text_size(px(12.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.muted)
                 .child("INSTALLED SKILLS")
@@ -385,7 +385,7 @@ pub fn render_skills_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                                         .py(px(1.0))
                                                         .rounded(px(4.0))
                                                         .bg(theme.input)
-                                                        .text_size(px(10.5))
+                                                        .text_size(px(11.0))
                                                         .text_color(theme.secondary)
                                                         .child(skill.category.clone()),
                                                 )
@@ -399,7 +399,7 @@ pub fn render_skills_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                                         } else {
                                                             theme.input
                                                         })
-                                                        .text_size(px(10.5))
+                                                        .text_size(px(11.0))
                                                         .text_color(if is_user {
                                                             theme.accent_text
                                                         } else {
@@ -420,7 +420,7 @@ pub fn render_skills_view(workspace: &WorkspaceView, cx: &mut Context<WorkspaceV
                                         )
                                         .child(
                                             div()
-                                                .text_size(px(12.5))
+                                                .text_size(px(13.0))
                                                 .text_color(theme.secondary)
                                                 .child(
                                                     skill

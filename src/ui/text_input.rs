@@ -18,7 +18,7 @@ use gpui::{
     GlobalElementId, IntoElement, KeyBinding, LayoutId, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent,
     ShapedLine, SharedString, Style, TextRun, UTF16Selection, Window, actions, div, fill, point,
-    prelude::*, px, relative, rgba, size,
+    prelude::*, px, relative, size,
 };
 
 use crate::ui::theme;
@@ -423,6 +423,7 @@ pub struct TextInput {
     pub(crate) pending_scroll_to_cursor: bool,
     pub(crate) last_bounds: Option<Bounds<Pixels>>,
     pub(crate) is_selecting: bool,
+    pub(crate) last_focused: bool,
     pub(crate) on_change: Option<ChangeCallback>,
 }
 
@@ -445,8 +446,15 @@ impl TextInput {
             pending_scroll_to_cursor: false,
             last_bounds: None,
             is_selecting: false,
+            last_focused: false,
             on_change: None,
         }
+    }
+
+    /// Returns the most recently observed focus state of this input so outer
+    /// input frames can cleanly highlight their border on focus/blur.
+    pub fn is_focused_cached(&self) -> bool {
+        self.last_focused
     }
 
     pub fn with_placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
@@ -806,6 +814,10 @@ impl TextInput {
     ) {
         self.is_selecting = true;
         window.focus(&self.focus_handle);
+        if !self.last_focused && !self.read_only {
+            self.last_focused = true;
+            window.refresh();
+        }
 
         let index = self.index_for_mouse_position(event.position);
         if event.modifiers.shift {
@@ -1295,7 +1307,7 @@ impl Element for TextElement {
             selected_range.clone()
         };
 
-        let selection_color = rgba(0xB5001844);
+        let selection_color = t.selection_bg;
 
         if is_multiline {
             // Reserve a few pixels on the right for the vertical scrollbar thumb.
@@ -1532,7 +1544,7 @@ impl Element for TextElement {
             }
         });
 
-        self.input.update(cx, |input, _cx| {
+        let focus_changed = self.input.update(cx, |input, _cx| {
             input.last_lines = lines;
             input.last_line_height = line_height;
             input.scroll_x = scroll_x;
@@ -1541,7 +1553,20 @@ impl Element for TextElement {
             input.max_scroll_y = max_scroll_y;
             input.pending_scroll_to_cursor = false;
             input.last_bounds = Some(bounds);
+            let effective = is_focused && !is_read_only;
+            if input.last_focused != effective {
+                input.last_focused = effective;
+                true
+            } else {
+                false
+            }
         });
+
+        if focus_changed {
+            window.defer(cx, |window, _cx| {
+                window.refresh();
+            });
+        }
     }
 }
 

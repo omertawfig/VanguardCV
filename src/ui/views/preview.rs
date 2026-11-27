@@ -82,14 +82,14 @@ pub fn render_preview_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                         .gap(px(4.0))
                         .child(
                             div()
-                                .text_size(px(26.0))
+                                .text_size(px(24.0))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.text)
                                 .child("PDF preview"),
                         )
                         .child(
                             div()
-                                .text_size(px(13.5))
+                                .text_size(px(14.0))
                                 .text_color(theme.secondary)
                                 .child(doc.title.clone()),
                         ),
@@ -254,14 +254,14 @@ pub fn render_preview_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                             .gap(px(2.0))
                             .child(
                                 div()
-                                    .text_size(px(12.5))
+                                    .text_size(px(13.0))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme.del_text)
                                     .child("Typst preview fallback active"),
                             )
                             .child(
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .text_color(theme.secondary)
                                     .child(err),
                             ),
@@ -528,7 +528,7 @@ pub fn render_preview_view(workspace: &WorkspaceView, cx: &mut Context<Workspace
                 .justify_center()
                 .flex_wrap()
                 .gap(px(6.0))
-                .text_size(px(11.5))
+                .text_size(px(12.0))
                 .text_color(theme.muted)
                 .child(div().flex_shrink_0().child(render_icon(IconName::Lock, 12.0, theme.muted)))
                 .child("Personal details are combined with your CV only in this local preview."),
@@ -604,7 +604,7 @@ pub fn render_live_preview_pane(
                         .child(
                             div()
                                 .flex_shrink_0()
-                                .text_size(px(12.5))
+                                .text_size(px(13.0))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
                                 .child("Live PDF"),
@@ -618,7 +618,7 @@ pub fn render_live_preview_pane(
                                     .rounded(px(4.0))
                                     .bg(theme.accent_soft)
                                     .text_color(theme.accent_text)
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .child("Compiling…"),
                             )
@@ -640,7 +640,7 @@ pub fn render_live_preview_pane(
                                     } else {
                                         theme.del_text
                                     })
-                                    .text_size(px(10.5))
+                                    .text_size(px(11.0))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .child(format!(
                                         "{page_count} {}",
@@ -748,7 +748,7 @@ pub fn render_live_preview_pane(
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .line_height(px(16.0))
                                     .text_color(theme.del_text)
                                     .child(format!(
@@ -890,7 +890,7 @@ pub fn render_live_preview_pane(
                                                 .when(page_count > 1, |p| {
                                                     p.child(
                                                         div()
-                                                            .text_size(px(10.5))
+                                                            .text_size(px(11.0))
                                                             .text_color(theme.muted)
                                                             .child(format!("Page {} of {page_count}", idx + 1)),
                                                     )
@@ -1113,7 +1113,7 @@ pub fn render_resume_paper(doc: &CvDocument, zoom: u32, target_width: f32, theme
                         el.child(
                             div()
                                 .text_size(px(13.5 * scale))
-                                .text_color(rgb(0x444444))
+                                .text_color(theme.paper_secondary)
                                 .child(title.to_string()),
                         )
                     },
@@ -1122,7 +1122,7 @@ pub fn render_resume_paper(doc: &CvDocument, zoom: u32, target_width: f32, theme
                     el.child(
                         div()
                             .text_size(px(11.5 * scale))
-                            .text_color(rgb(0x555555))
+                            .text_color(theme.paper_muted)
                             .child(contact_items.join("  |  ")),
                     )
                 })
@@ -1134,11 +1134,11 @@ pub fn render_resume_paper(doc: &CvDocument, zoom: u32, target_width: f32, theme
                         .flex_wrap()
                         .gap(px(8.0 * scale))
                         .text_size(px(11.5 * scale))
-                        .text_color(rgb(0x1a4575));
+                        .text_color(theme.paper_link);
 
                     for (idx, link) in enabled_links.iter().enumerate() {
                         if idx > 0 {
-                            links_row = links_row.child(div().text_color(rgb(0x888888)).child("|"));
+                            links_row = links_row.child(div().text_color(theme.paper_divider).child("|"));
                         }
                         let text = if !link.display_text.is_empty() {
                             link.display_text.clone()
@@ -1157,7 +1157,7 @@ pub fn render_resume_paper(doc: &CvDocument, zoom: u32, target_width: f32, theme
                     el.child(
                         div()
                             .text_size(px(11.0 * scale))
-                            .text_color(rgb(0x555555))
+                            .text_color(theme.paper_muted)
                             .child(custom_line.join("  |  ")),
                     )
                 }),
@@ -1168,11 +1168,11 @@ pub fn render_resume_paper(doc: &CvDocument, zoom: u32, target_width: f32, theme
                 .sections
                 .iter()
                 .filter(|s| s.enabled)
-                .map(|sec| render_paper_section(sec, scale)),
+                .map(|sec| render_paper_section(sec, scale, theme)),
         )
 }
 
-fn render_paper_section(sec: &CvSection, scale: f32) -> Div {
+fn render_paper_section(sec: &CvSection, scale: f32, theme: &Theme) -> Div {
     let mut section_div = div().flex().flex_col().gap(px(8.0 * scale));
 
     // Section title uppercase with underlined bar
@@ -1187,7 +1187,7 @@ fn render_paper_section(sec: &CvSection, scale: f32) -> Div {
                     .font_weight(FontWeight::BOLD)
                     .child(sec.title.to_uppercase()),
             )
-            .child(div().w_full().h(px(1.0 * scale)).bg(rgb(0x222222))),
+            .child(div().w_full().h(px(1.0 * scale)).bg(theme.paper_rule)),
     );
 
     match &sec.kind {
@@ -1196,7 +1196,7 @@ fn render_paper_section(sec: &CvSection, scale: f32) -> Div {
                 div()
                     .text_size(px(11.0 * scale))
                     .line_height(px(16.0 * scale))
-                    .text_color(rgb(0x333333))
+                    .text_color(theme.paper_body)
                     .child(text.clone()),
             );
         }

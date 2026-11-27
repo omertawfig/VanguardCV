@@ -8,6 +8,9 @@
 /vanguard-ui/
 /logo.png
 
+# Local AI agent skills (project-only, untracked)
+/.agents/
+
 # IDE & OS metadata
 /.idea
 /.vscode

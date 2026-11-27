@@ -12,9 +12,10 @@ use gpui::*;
 use crate::contracts::SectionKind;
 use crate::importer::{ImportDraft, ImportLine, ImportLineRole, ImportSectionKind};
 use crate::ui::components::ui::{
-    ButtonVariant, IconName, el_id, render_button, render_icon, render_icon_button,
+    ButtonVariant, IconName, el_id, render_button, render_decorated_input_box, render_icon,
+    render_icon_button,
 };
-use crate::ui::theme::Theme;
+use crate::ui::theme::{RADIUS_LG, Theme};
 use crate::ui::workspace::WorkspaceView;
 
 pub fn render_import_cv_modal(
@@ -38,8 +39,8 @@ pub fn render_import_cv_modal(
             .child("No import draft loaded.");
     };
 
-    let stats = draft.stats();
-    let parsed_body = draft.build_body();
+    let stats = draft.cached_stats();
+    let parsed_body = draft.cached_body();
     let can_import = stats.sections > 0;
     let file_name = draft.source_file_name.clone();
     let format_label = draft.source_format.label();
@@ -52,7 +53,7 @@ pub fn render_import_cv_modal(
         .h(px(modal_h))
         .flex()
         .flex_col()
-        .rounded(px(10.0))
+        .rounded(px(RADIUS_LG))
         .bg(theme.surface)
         .border_1()
         .border_color(theme.border)
@@ -90,7 +91,7 @@ pub fn render_import_cv_modal(
                                 .gap(px(8.0))
                                 .child(
                                     div()
-                                        .text_size(px(16.5))
+                                        .text_size(px(16.0))
                                         .font_weight(FontWeight::BOLD)
                                         .text_color(theme.text)
                                         .child("Verify imported master CV"),
@@ -170,18 +171,16 @@ pub fn render_import_cv_modal(
                                 .child("Master CV title"),
                         )
                         .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .h(px(32.0))
-                                .px(px(10.0))
-                                .rounded(px(5.0))
-                                .bg(theme.input)
-                                .border_1()
-                                .border_color(theme.border)
-                                .flex()
-                                .items_center()
-                                .child(workspace.import_title_input.clone()),
+                            render_decorated_input_box(
+                                workspace.import_title_input.clone(),
+                                32.0,
+                                None,
+                                None,
+                                None,
+                                theme,
+                                cx,
+                            )
+                            .flex_1(),
                         ),
                 )
                 .child(
@@ -258,7 +257,7 @@ pub fn render_import_cv_modal(
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .text_size(px(11.5))
+                                .text_size(px(12.0))
                                 .line_height(px(16.0))
                                 .text_color(theme.secondary)
                                 .child(
@@ -277,7 +276,7 @@ pub fn render_import_cv_modal(
                         .bg(theme.accent_soft)
                         .border_1()
                         .border_color(theme.accent)
-                        .text_size(px(11.5))
+                        .text_size(px(12.0))
                         .text_color(theme.accent_text)
                         .child(warn)
                 })),
@@ -306,7 +305,7 @@ pub fn render_import_cv_modal(
                 // Right pane: live parsed CV preview
                 .child(render_preview_pane(
                     workspace,
-                    &parsed_body,
+                    parsed_body,
                     stats,
                     side_by_side,
                     theme,
@@ -513,7 +512,7 @@ fn render_import_line_row(
                                 .gap(px(5.0))
                                 .child(
                                     div()
-                                        .text_size(px(10.0))
+                                        .text_size(px(11.0))
                                         .font_weight(FontWeight::BOLD)
                                         .text_color(theme.muted)
                                         .child(format!("#{}", idx + 1)),
@@ -617,21 +616,25 @@ fn render_import_line_row(
                                         div()
                                             .id(el_id(format!("imp-line-{idx}-merge")))
                                             .cursor_pointer()
-                                            .px(px(6.0))
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(4.0))
+                                            .px(px(7.0))
                                             .py(px(2.0))
                                             .rounded(px(4.0))
                                             .bg(theme.input)
                                             .border_1()
-                                            .border_color(theme.border)
-                                            .hover(|s| s.bg(theme.hover))
-                                            .text_size(px(10.0))
+                                            .border_color(theme.border_control)
+                                            .hover(|s| s.bg(theme.hover).border_color(theme.secondary))
+                                            .text_size(px(11.0))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(theme.secondary)
                                             .on_click(cx.listener(move |this, _, _, cx| {
                                                 this.merge_import_line_up(idx);
                                                 cx.notify();
                                             }))
-                                            .child("Merge ↑"),
+                                            .child(render_icon(IconName::Up, 11.0, theme.secondary))
+                                            .child("Merge"),
                                     )
                                 }),
                         ),
@@ -672,7 +675,7 @@ fn render_import_line_row(
                                 .pt(px(2.0))
                                 .child(
                                     div()
-                                        .text_size(px(10.5))
+                                        .text_size(px(11.0))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(theme.secondary)
                                         .child("Section type:"),
@@ -697,12 +700,13 @@ fn render_import_line_row(
                                         .border_color(if selected {
                                             theme.accent
                                         } else {
-                                            theme.border
+                                            theme.border_control
                                         })
-                                        .text_size(px(10.5))
+                                        .hover(|s| s.border_color(theme.accent))
+                                        .text_size(px(11.0))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(if selected {
-                                            rgb(0xffffff)
+                                            theme.on_accent
                                         } else {
                                             theme.secondary
                                         })
@@ -862,7 +866,7 @@ fn render_preview_pane(
                     )
                     .child(match &sec.kind {
                         SectionKind::Summary { text } => div()
-                            .text_size(px(11.5))
+                            .text_size(px(12.0))
                             .line_height(px(17.0))
                             .text_color(if text.trim().is_empty() {
                                 theme.muted
@@ -877,7 +881,7 @@ fn render_preview_pane(
                         SectionKind::TimelineEntries { entries } => {
                             if entries.is_empty() {
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .text_color(theme.muted)
                                     .child("(No entries yet — mark a line as Entry)")
                             } else {
@@ -911,7 +915,7 @@ fn render_preview_pane(
                                                     .when(!date_str.is_empty(), |el| {
                                                         el.child(
                                                             div()
-                                                                .text_size(px(10.5))
+                                                                .text_size(px(11.0))
                                                                 .text_color(theme.muted)
                                                                 .child(date_str),
                                                         )
@@ -922,7 +926,7 @@ fn render_preview_pane(
                                                 |el, sub| {
                                                     el.child(
                                                         div()
-                                                            .text_size(px(11.5))
+                                                            .text_size(px(12.0))
                                                             .font_weight(FontWeight::MEDIUM)
                                                             .text_color(theme.secondary)
                                                             .child(sub),
@@ -946,7 +950,7 @@ fn render_preview_pane(
                         SectionKind::CategorizedInlineList { categories } => {
                             if categories.is_empty() {
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .text_color(theme.muted)
                                     .child("(No skill categories yet — mark lines as Point)")
                             } else {
@@ -956,7 +960,7 @@ fn render_preview_pane(
                                     .gap(px(5.0))
                                     .children(categories.iter().map(|cat| {
                                         div()
-                                            .text_size(px(11.5))
+                                            .text_size(px(12.0))
                                             .line_height(px(16.5))
                                             .text_color(theme.secondary)
                                             .child(format!(
@@ -970,7 +974,7 @@ fn render_preview_pane(
                         SectionKind::SimpleBulletList { items } => {
                             if items.is_empty() {
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(px(12.0))
                                     .text_color(theme.muted)
                                     .child("(No points yet — mark lines as Point)")
                             } else {
@@ -1007,7 +1011,7 @@ fn render_role_pill(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Stateful<Div> {
     let (bg, border, fg) = if active && accent {
-        (theme.accent, theme.accent, rgb(0xffffff))
+        (theme.accent, theme.accent, theme.on_accent)
     } else if active {
         (theme.hover, theme.secondary, theme.text)
     } else {
@@ -1024,7 +1028,7 @@ fn render_role_pill(
         .border_1()
         .border_color(border)
         .hover(|s| s.border_color(theme.secondary))
-        .text_size(px(10.0))
+        .text_size(px(11.0))
         .font_weight(if active {
             FontWeight::BOLD
         } else {
@@ -1044,7 +1048,7 @@ fn render_badge(label: &str, bg: Rgba, fg: Rgba, border: Rgba) -> Div {
         .bg(bg)
         .border_1()
         .border_color(border)
-        .text_size(px(10.0))
+        .text_size(px(11.0))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(fg)
         .child(label.to_string())
